@@ -1,0 +1,324 @@
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #111827;
+  background: #f4f4f5;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 35%),
+    #f4f4f5;
+}
+
+.app-layout {
+  width: min(100%, 72rem);
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.1;
+}
+
+.hero {
+  margin-bottom: 1.5rem;
+}
+
+.hero-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.language-switcher {
+  display: inline-flex;
+  padding: 0.25rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.language-button {
+  padding: 0.45rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #3f3f46;
+  font: inherit;
+  cursor: pointer;
+}
+
+.language-button--active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.panel,
+.section-block {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.panel-heading {
+  margin-bottom: 0.9rem;
+}
+
+.panel-heading h2,
+.stats-grid h3,
+.event-card__header h3 {
+  margin: 0;
+}
+
+.status {
+  margin: 0.75rem 0 0;
+  color: #3f3f46;
+}
+
+.stats-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.stat-list {
+  margin: 0.75rem 0 0;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.stat-row dt {
+  color: #52525b;
+}
+
+.stat-row dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.event-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.event-card__header {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.event-badge {
+  width: fit-content;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  font-style: normal;
+}
+
+.event-badge--safe {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.event-badge--risky {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.event-badge--absurd {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.event-description {
+  margin: 0.9rem 0 0;
+  color: #3f3f46;
+}
+
+.action-stack {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.action-button {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.6rem;
+  background: #eff6ff;
+  color: #1e3a8a;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.action-button:hover {
+  background: #dbeafe;
+}
+
+.action-button--safe {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.action-button--safe:hover {
+  background: #dcfce7;
+}
+
+.action-button--risky {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.action-button--risky:hover {
+  background: #fef3c7;
+}
+
+.action-button--absurd {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.action-button--absurd:hover {
+  background: #fee2e2;
+}
+
+.action-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.action-button__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.action-button small {
+  color: #334155;
+}
+
+.history-log {
+  display: grid;
+  gap: 0.9rem;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.history-entry {
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.history-entry:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.history-entry p {
+  margin: 0.45rem 0 0;
+}
+
+.history-entry__meta {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.history-missed-paths {
+  margin: 0.6rem 0 0;
+  padding-left: 1.25rem;
+  color: #52525b;
+}
+
+.muted-text {
+  margin: 0;
+  color: #52525b;
+}
+
+.ending-panel {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+}
+
+.ending-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.restart-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.restart-button:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 1rem;
+  }
+
+  .hero-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel,
+  .section-block {
+    padding: 1rem;
+  }
+}
