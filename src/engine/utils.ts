@@ -9,6 +9,11 @@ export function clampStat(value: number): number {
   return clamp(value, 0, 100);
 }
 
+export function getMaxTurns(): number {
+  const turns = Number(import.meta.env.VITE_TURNS);
+  return turns > 0 ? turns : 5;
+}
+
 export function applyPlayerDelta(
   player: PlayerState,
   delta: PlayerDelta,

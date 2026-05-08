@@ -74,7 +74,8 @@ export type EndingId =
   | 'stable_generalist'
   | 'chaotic_innovator'
   | 'connected_builder'
-  | 'delightfully_strange_person';
+  | 'delightfully_strange_person'
+  | 'ai_generated';
 
 export type Ending = {
   id: EndingId;
@@ -84,4 +85,5 @@ export type Ending = {
 
 export type DisplayedTurn = {
   currentEvent: Event;
+  isAIGenerated?: boolean;
 };

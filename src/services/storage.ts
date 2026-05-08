@@ -1,5 +1,5 @@
 import type { Locale } from '../i18n';
-import type { DisplayedTurn, GameState } from '../engine/types';
+import type { DisplayedTurn, Ending, GameState } from '../engine/types';
 
 export const STORAGE_KEY = 'fomo-simulator-save';
 const STORAGE_VERSION = 1;
@@ -9,6 +9,7 @@ export type PersistedGame = {
   gameState: GameState;
   displayedTurn: DisplayedTurn | null;
   locale: Locale;
+  ending: Ending | null;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -38,7 +39,15 @@ function isValidDisplayedTurn(value: unknown): value is DisplayedTurn | null {
     return true;
   }
 
-  return isObject(value) && isObject(value.currentEvent);
+  return isObject(value) && isObject(value.currentEvent) && 'isAIGenerated' in value;
+}
+
+function isValidEnding(value: unknown): value is Ending | null {
+  if (value === null) {
+    return true;
+  }
+
+  return isObject(value) && typeof value.id === 'string' && typeof value.title === 'string' && typeof value.summary === 'string';
 }
 
 function isValidPersistedGame(value: unknown): value is PersistedGame {
@@ -50,7 +59,8 @@ function isValidPersistedGame(value: unknown): value is PersistedGame {
     value.version === STORAGE_VERSION &&
     isValidGameState(value.gameState) &&
     isValidDisplayedTurn(value.displayedTurn) &&
-    isValidLocale(value.locale)
+    isValidLocale(value.locale) &&
+    isValidEnding(value.ending)
   );
 }
 

@@ -1,5 +1,6 @@
 import { applyPlayerDelta, applyWorldDelta } from './utils';
 import type { Action, DisplayedTurn, Event, GameState, HistoryEntry } from './types';
+import { getMaxTurns } from './utils';
 
 function getMissedPaths(action: Action, displayedTurn: DisplayedTurn): string[] {
   return displayedTurn.currentEvent.actions
@@ -38,6 +39,6 @@ export function resolveAction(
       turn: currentTurn + 1,
     },
     history: [...state.history, historyEntry],
-    completed: currentTurn >= 20,
+    completed: currentTurn >= getMaxTurns(),
   };
 }

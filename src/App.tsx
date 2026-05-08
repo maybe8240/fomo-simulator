@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { getEnding } from './engine/endings';
+import { STARTER_EVENTS } from './engine/events';
 import { generateTurnEvents } from './engine/generator';
 import { resolveAction } from './engine/resolver';
 import { createInitialState } from './engine/state';
 import { getLocalizedEnding, translate } from './i18n';
 import type { Locale } from './i18n';
-import type { Action, DisplayedTurn, Event, GameState } from './engine/types';
+import type { Action, DisplayedTurn, Ending, Event, GameState } from './engine/types';
 import { clearSavedGame, loadSavedGame, saveGame } from './services/storage';
 import EventCard from './ui/EventCard';
 import HistoryLog from './ui/HistoryLog';
@@ -16,6 +17,7 @@ type AppState = {
   gameState: GameState;
   displayedTurn: DisplayedTurn;
   locale: Locale;
+  isGenerating: boolean;
 };
 
 function createFreshAppState(locale: Locale = 'en'): AppState {
@@ -23,13 +25,14 @@ function createFreshAppState(locale: Locale = 'en'): AppState {
 
   return {
     gameState,
-    displayedTurn: generateTurnEvents(gameState),
+    displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
     locale,
+    isGenerating: false,
   };
 }
 
 function App() {
-  const [{ gameState, displayedTurn, locale }, setAppState] = useState<AppState>(() => {
+  const [{ gameState, displayedTurn, locale, isGenerating }, setAppState] = useState<AppState>(() => {
     const savedGame = loadSavedGame();
 
     if (savedGame?.displayedTurn) {
@@ -37,21 +40,36 @@ function App() {
         gameState: savedGame.gameState,
         displayedTurn: savedGame.displayedTurn,
         locale: savedGame.locale,
+        isGenerating: false,
       };
     }
 
     return createFreshAppState();
   });
   const [isResolving, setIsResolving] = useState(false);
+  const [isGeneratingEnding, setIsGeneratingEnding] = useState(false);
+  const [ending, setEnding] = useState<Ending | null>(() => {
+    const saved = loadSavedGame();
+    return saved?.ending ?? null;
+  });
   const isResolvingRef = useRef(false);
 
-  const ending = gameState.completed ? getEnding(gameState) : null;
   const currentEvent = displayedTurn.currentEvent;
   const localizedEnding = ending
     ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary)
     : null;
 
-  const handleSelectAction = (event: Event, action: Action) => {
+  useEffect(() => {
+    if (gameState.completed && !ending && !isGeneratingEnding) {
+      setIsGeneratingEnding(true);
+      getEnding(gameState).then((result) => {
+        setEnding(result);
+        setIsGeneratingEnding(false);
+      });
+    }
+  }, [gameState.completed, ending, isGeneratingEnding]);
+
+  const handleSelectAction = async (event: Event, action: Action) => {
     if (isResolvingRef.current || gameState.completed) {
       return;
     }
@@ -60,22 +78,37 @@ function App() {
     setIsResolving(true);
 
     try {
-      setAppState((current) => {
-        const nextGameState = resolveAction(
-          current.gameState,
-          event,
-          action,
-          current.displayedTurn,
-        );
+      const nextGameState = resolveAction(
+        gameState,
+        event,
+        action,
+        displayedTurn,
+      );
 
-        return {
-          locale: current.locale,
+      if (nextGameState.completed) {
+        setAppState({
+          locale,
           gameState: nextGameState,
-          displayedTurn: nextGameState.completed
-            ? current.displayedTurn
-            : generateTurnEvents(nextGameState),
-        };
-      });
+          displayedTurn,
+          isGenerating: false,
+        });
+        return;
+      }
+
+      setAppState((current) => ({
+        ...current,
+        gameState: nextGameState,
+        isGenerating: true,
+      }));
+
+      const newDisplayedTurn = await generateTurnEvents(nextGameState);
+
+      setAppState((current) => ({
+        ...current,
+        gameState: nextGameState,
+        displayedTurn: newDisplayedTurn,
+        isGenerating: false,
+      }));
     } finally {
       isResolvingRef.current = false;
       setIsResolving(false);
@@ -87,6 +120,7 @@ function App() {
     setIsResolving(false);
     clearSavedGame();
     setAppState(createFreshAppState(locale));
+    setEnding(null);
   };
 
   useEffect(() => {
@@ -94,8 +128,9 @@ function App() {
       gameState,
       displayedTurn,
       locale,
+      ending,
     });
-  }, [displayedTurn, gameState, locale]);
+  }, [displayedTurn, gameState, locale, ending]);
 
   return (
     <main className="app-shell">
@@ -133,14 +168,16 @@ function App() {
               </button>
             </div>
           </div>
-          <p className="status">{translate(locale, 'app_description')}</p>
         </header>
 
-        <StatPanel gameState={gameState} locale={locale} />
+        {import.meta.env.DEV && <StatPanel gameState={gameState} locale={locale} />}
 
         <section className="section-block">
           <div className="panel-heading">
             <h2>{translate(locale, 'current_event')}</h2>
+            {import.meta.env.DEV && displayedTurn.isAIGenerated && (
+              <span className="event-badge event-badge--ai">{translate(locale, 'ai_generated')}</span>
+            )}
           </div>
           <EventCard
             disabled={isResolving || gameState.completed}
@@ -163,16 +200,20 @@ function App() {
             </button>
           </section>
         ) : (
-          <section className="panel">
-            <div className="panel-heading">
-              <h2>{translate(locale, 'turn_status')}</h2>
-            </div>
-            <p className="muted-text">
-              {isResolving
-                ? translate(locale, 'resolving')
-                : translate(locale, 'pick_action')}
-            </p>
-          </section>
+          import.meta.env.DEV && (
+            <section className="panel">
+              <div className="panel-heading">
+                <h2>{translate(locale, 'turn_status')}</h2>
+              </div>
+              <p className="muted-text">
+                {isGenerating
+                  ? translate(locale, 'generating_event')
+                  : isResolving
+                    ? translate(locale, 'resolving')
+                    : translate(locale, 'pick_action')}
+              </p>
+            </section>
+          )
         )}
 
         <HistoryLog history={gameState.history} locale={locale} />
