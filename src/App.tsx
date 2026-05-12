@@ -9,6 +9,7 @@ import { getLocalizedEnding, translate } from './i18n';
 import type { Locale } from './i18n';
 import type { Action, DisplayedTurn, Ending, Event, GameState } from './engine/types';
 import { clearSavedGame, loadSavedGame, saveGame } from './services/storage';
+import { isAIEnabled, getAIConfig } from './services/ai';
 import EventCard from './ui/EventCard';
 import HistoryLog from './ui/HistoryLog';
 import StatPanel from './ui/StatPanel';
@@ -22,6 +23,28 @@ type AppState = {
 
 function createFreshAppState(locale: Locale = 'en'): AppState {
   const gameState = createInitialState();
+
+  return {
+    gameState,
+    displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
+    locale,
+    isGenerating: false,
+  };
+}
+
+async function createFreshAppStateWithAI(locale: Locale = 'en'): Promise<AppState> {
+  const gameState = createInitialState();
+  const aiConfig = getAIConfig();
+
+  if (aiConfig) {
+    const displayedTurn = await generateTurnEvents(gameState);
+    return {
+      gameState,
+      displayedTurn,
+      locale,
+      isGenerating: false,
+    };
+  }
 
   return {
     gameState,
@@ -53,6 +76,19 @@ function App() {
     return saved?.ending ?? null;
   });
   const isResolvingRef = useRef(false);
+  const [isInitialized, setIsInitialized] = useState(() => {
+    const savedGame = loadSavedGame();
+    return savedGame?.displayedTurn !== undefined;
+  });
+
+  useEffect(() => {
+    if (!isInitialized && isAIEnabled() && getAIConfig()) {
+      setIsInitialized(true);
+      createFreshAppStateWithAI().then((initialState) => {
+        setAppState(initialState);
+      });
+    }
+  }, [isInitialized]);
 
   const currentEvent = displayedTurn.currentEvent;
   const localizedEnding = ending
@@ -119,8 +155,22 @@ function App() {
     isResolvingRef.current = false;
     setIsResolving(false);
     clearSavedGame();
-    setAppState(createFreshAppState(locale));
+    setIsInitialized(false);
     setEnding(null);
+
+    if (isAIEnabled() && getAIConfig()) {
+      setAppState({
+        gameState: createInitialState(),
+        displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
+        locale,
+        isGenerating: true,
+      });
+      createFreshAppStateWithAI(locale).then((initialState) => {
+        setAppState(initialState);
+      });
+    } else {
+      setAppState(createFreshAppState(locale));
+    }
   };
 
   useEffect(() => {
@@ -165,6 +215,14 @@ function App() {
                 type="button"
               >
                 {translate(locale, 'chinese')}
+              </button>
+              <button
+                className="restart-button restart-button--small"
+                onClick={handleRestart}
+                type="button"
+                title={translate(locale, 'restart_run')}
+              >
+                ↻
               </button>
             </div>
           </div>

@@ -43,6 +43,7 @@ export async function generateTurnEvents(state: GameState): Promise<DisplayedTur
     ? new Set<string>([latestHistoryEntry.eventId])
     : new Set<string>();
   const rng = createRng(getTurnSeed(state));
+  const isFirstTurn = state.history.length === 0;
 
   if (isAIEnabled()) {
     console.log("AI Enabled...")
@@ -52,7 +53,7 @@ export async function generateTurnEvents(state: GameState): Promise<DisplayedTur
         playerState: state.player,
         worldState: state.world,
         recentHistory: state.history,
-      });
+      }, isFirstTurn);
 
       if (aiResult.success && aiResult.actions.length === 3) {
         const event: Event = {
