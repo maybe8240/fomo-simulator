@@ -1,5 +1,5 @@
-import { applyPlayerDelta, applyWorldDelta } from './utils';
-import type { Action, DisplayedTurn, Event, GameState, HistoryEntry } from './types';
+import { applyPlayerDelta, applyWorldDelta } from './utils.ts';
+import type { Action, DisplayedTurn, Event, GameState, HistoryEntry } from './types.ts';
 
 function getMissedPaths(action: Action, displayedTurn: DisplayedTurn): string[] {
   return displayedTurn.currentEvent.actions

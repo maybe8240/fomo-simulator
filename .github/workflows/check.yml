@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_AI_ENABLED: 'false'
-      VITE_CLAUDE_API_KEY: ''
       VITE_TURNS: '5'
     steps:
       - uses: actions/checkout@v4
@@ -20,5 +19,12 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit
+      - run: npm run audit
       - run: npm run check
+  container:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag fomo-simulator:ci .

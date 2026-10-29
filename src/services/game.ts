@@ -1,8 +1,8 @@
 import { getEnding } from '../engine/endings';
 import { generateTurnEvents } from '../engine/generator';
 import type { DisplayedTurn, Ending, GameState } from '../engine/types';
-import { generateEndingWithAI, generateEventWithAI } from './ai';
-import type { AIConfig } from './ai';
+import { isDisplayedTurn, isEnding } from '../engine/validation';
+import { requestGameGeneration } from './ai';
 import { getGameConfig } from './config';
 
 export interface GameServices {
@@ -11,49 +11,29 @@ export interface GameServices {
   generateTurn(state: GameState, signal: AbortSignal): Promise<DisplayedTurn>;
   generateEnding(state: GameState, signal: AbortSignal): Promise<Ending>;
 }
-
 export function createGameServices(
-  config: { ai: AIConfig | null; maxTurns: number },
-  fetcher?: typeof fetch,
+  config: { aiEnabled: boolean; maxTurns: number }, fetcher?: typeof fetch,
 ): GameServices {
   return {
-    aiEnabled: config.ai !== null,
-    maxTurns: config.maxTurns,
+    ...config,
     async generateTurn(state, signal) {
-      if (config.ai) {
-        const result = await generateEventWithAI(config.ai, {
-          playerState: state.player,
-          worldState: state.world,
-          recentHistory: state.history,
-        }, state.history.length === 0, { signal, fetcher });
-        if (result.success) {
-          return {
-            currentEvent: {
-              id: `ai-${state.world.turn}`,
-              title: result.eventTitle,
-              description: result.description,
-              actions: result.actions,
-            },
-            isAIGenerated: true,
-          };
-        }
+      if (config.aiEnabled) {
+        try {
+          const result = await requestGameGeneration('event', state, signal, fetcher);
+          if (isDisplayedTurn(result)) return result;
+        } catch { /* Static content remains available on service failures. */ }
       }
       return generateTurnEvents(state);
     },
     async generateEnding(state, signal) {
-      if (config.ai) {
-        const result = await generateEndingWithAI(config.ai, {
-          playerState: state.player,
-          worldState: state.world,
-          history: state.history,
-        }, { signal, fetcher });
-        if (result.success) {
-          return { id: 'ai_generated', title: result.title, summary: result.summary };
-        }
+      if (config.aiEnabled) {
+        try {
+          const result = await requestGameGeneration('ending', state, signal, fetcher);
+          if (isEnding(result)) return result;
+        } catch { /* Static content remains available on service failures. */ }
       }
       return getEnding(state);
     },
   };
 }
-
 export const defaultGameServices = createGameServices(getGameConfig());

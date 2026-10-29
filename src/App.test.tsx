@@ -8,7 +8,7 @@ import type { GameServices } from './services/game';
 
 describe('game interface', () => {
   it('plays an offline run to an ending and restarts in the selected language', async () => {
-    render(<App services={createGameServices({ ai: null, maxTurns: 2 })} />);
+    render(<App services={createGameServices({ aiEnabled: false, maxTurns: 2 })} />);
     fireEvent.click(screen.getByRole('button', { name: /Apply immediately/ }));
     await waitFor(() => expect(document.querySelectorAll('.action-button')).toHaveLength(3));
     fireEvent.click(document.querySelector('.action-button')!);

@@ -102,7 +102,7 @@ describe('run lifecycle', () => {
   });
 
   it('reloads a completed ending without generating again', async () => {
-    const service = createGameServices({ ai: null, maxTurns: 1 });
+    const service = createGameServices({ aiEnabled: false, maxTurns: 1 });
     const first = renderHook(() => useGame(service));
     choose(first.result);
     await waitFor(() => expect(first.result.current.ending).not.toBeNull());

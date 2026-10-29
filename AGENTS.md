@@ -20,8 +20,13 @@
   Windows reports a locked native dependency. Do not replace the locked stack
   with a newer Vite major as part of unrelated work.
 - Start locally with `npm run dev`. No `.env` or credentials are required.
+- To exercise the local API, also run `npm run dev:server` in a second terminal.
+  The Node server defaults to static generation; local AI needs a Google workload.
 - Run `npm run check` before handing off code changes. During development use
   `npm test -- <test-file>` and `npm run typecheck` for focused feedback.
+- For dependency changes, also run `npm run audit` and report its result. It
+  requires network access and checks development dependencies too; CI runs it
+  separately from the offline tests.
 - Run relevant tests after editing, plus lint, type checks, and the build where
   available. Add regression tests for bug fixes.
 - Report the commands executed and their results. Never claim success for checks
@@ -42,9 +47,12 @@
 
 - `src/engine/` owns synchronous domain rules. Keep it independent of React,
   browser storage, HTTP, and `import.meta.env`.
-- `src/services/config.ts` reads game configuration; `services/game.ts` adapts AI
-  to the engine and accepts an injected transport. `services/ai.ts` owns prompts,
-  HTTP, response parsing, timeout, and cancellation.
+- `src/services/config.ts` reads browser flags. `services/game.ts` provides static
+  fallback and accepts an injected transport; `services/ai.ts` only calls the
+  same-origin `/api/game/*` endpoints. Never add provider credentials to `VITE_*`.
+- `server/` owns federation, prompts, model configuration, response validation,
+  HTTP access controls, and request limits. Keep server imports out of `src/`.
+  Shared engine imports use explicit `.ts` extensions for Node 24's native runner.
 - `src/useGame.ts` coordinates a run. A null displayed event means generation is
   pending and must survive reload. Never persist an advanced state with its old
   playable event. Ignore stale responses after restart or unmount.
