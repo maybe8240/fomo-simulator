@@ -42,8 +42,8 @@ export function generateTurnEvents(state: GameState): DisplayedTurn {
     ? new Set<string>([latestHistoryEntry.eventId])
     : new Set<string>();
   const rng = createRng(getTurnSeed(state));
-
   return {
     currentEvent: pickRandomEvent(STARTER_EVENTS, rng, excludedIds),
+    isAIGenerated: false,
   };
 }
