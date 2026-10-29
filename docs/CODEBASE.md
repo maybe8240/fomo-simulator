@@ -1,238 +1,117 @@
-# FOMO Simulator - Codebase Documentation
+# Codebase map
 
-## Project Overview
+FOMO Simulator is a React 18 + TypeScript browser application built with Vite 5.
+It has no router, application server, remote database, or authentication. Plain
+CSS lives in `src/index.css`; English/Chinese dictionaries live in `src/i18n.ts`.
 
-A narrative life simulation game set in 2026 during the AI era. Players make choices across 20 turns, each choice affecting stats (money, AI skill, network, energy, curiosity, chaos) and world state (AI hype, economy). The game emphasizes exploration over optimization—no wrong choices, just different life paths.
+## Entry points and ownership
 
-## Directory Structure
+| Path | Responsibility |
+| --- | --- |
+| `index.html` → `src/main.tsx` | Mount `App` under React Strict Mode |
+| `src/App.tsx` | Render the run, language controls, pending status, and ending; accepts injected `GameServices` |
+| `src/useGame.ts` | Load/save a run, accept choices, restart, and coordinate cancellable async work |
+| `src/engine/types.ts` | Player/world stats, events, actions, history, and ending contracts |
+| `src/engine/state.ts` | Initial stats at 50, turn 1, optional explicit seed |
+| `src/engine/events.ts` | Ten static events with safe/risky/absurd choices |
+| `src/engine/generator.ts`, `rng.ts` | Synchronous seeded event selection based on seed and history; excludes the previous event |
+| `src/engine/resolver.ts`, `utils.ts` | Immutable stat updates, 0–100 clamping, history, and completion |
+| `src/engine/endings.ts` | Synchronous stat-based ending with explicit precedence |
+| `src/services/config.ts` | Validate configured turn count and select optional AI configuration |
+| `src/services/game.ts` | Async event/ending interface, optional AI calls, static fallbacks, injectable fetch |
+| `src/services/ai.ts` | Anthropic Messages HTTP, prompts, normalization, 30-second timeout, cancellation |
+| `src/prompts/narrator.ts` | Detailed opening narrator system prompt |
+| `src/services/storage.ts` | Validate and persist schema-version-1 saves in localStorage |
+| `src/ui/` | Event choices, development stats, and newest-first history |
 
-```
-src/
-├── engine/           # Core game logic
-│   ├── types.ts      # All TypeScript interfaces/types
-│   ├── state.ts     # Initial state factory
-│   ├── events.ts   # Static event definitions (10 events)
-│   ├── generator.ts # Turn event selection
-│   ├── resolver.ts # Action resolution + stat updates
-│   ├── endings.ts  # Ending determination logic
-│   ├── rng.ts      # Seeded random number generator
-│   └── utils.ts    # Stat clamping, delta application
-├── ui/             # React components
-│   ├── StatPanel.tsx    # Player + world stats display
-│   ├── EventCard.tsx    # Current event + 3 action buttons
-│   └── HistoryLog.tsx  # Past turns display
-├── services/
-│   └── storage.ts  # LocalStorage persistence
-├── i18n.ts        # Translations (en/zh) + event text
-├── App.tsx        # Main game component
-└── main.tsx       # React entry point
-```
+The engine has no React, environment, storage, or network dependencies. The
+`GameServices` interface supplies `aiEnabled`, `maxTurns`, `generateTurn`, and
+`generateEnding`; both async methods receive an `AbortSignal`. The production
+adapter is created once from Vite configuration. Tests can inject controlled
+promises or fake HTTP without changing engine behavior.
 
-## Core Types (`src/engine/types.ts`)
+## A choice through the application
 
-| Type | Purpose |
-|------|---------|
-| `PlayerState` | `{ money, skill_ai, network, energy, curiosity, chaos }` all 0-100 |
-| `WorldState` | `{ ai_hype, economy, turn }` all 0-100, turn starts at 1 |
-| `Action` | `{ id, type, label, flavor, playerDelta, worldDelta }` |
-| `Event` | `{ id, title, description, actions[] }` |
-| `HistoryEntry` | `{ turn, eventId, eventTitle, actionId, actionLabel, resultText, missedPathsText[] }` |
-| `GameState` | `{ player, world, history, seed, completed }` |
-| `Ending` | `{ id, title, summary }` - determined at turn 20 |
+1. `useGame` loads a valid save. A fresh offline run shows the first static event;
+   a fresh AI run starts with a null displayed event and requests its opening.
+2. `EventCard` forwards the selected event/action to `useGame.selectAction`.
+3. The updater rejects stale, duplicate, or completed-run submissions, then calls
+   `resolveAction` with the configured turn limit.
+4. The resolver applies deltas, records the selected and missed paths, and advances
+   the turn. It marks completion when the resolved turn reaches the limit.
+5. For an unfinished run, the displayed event becomes null. The save effect stores
+   this pending state, and the generation effect asks `GameServices` for an event.
+6. The adapter requests AI content if configured, otherwise chooses static content.
+   HTTP/network/parsing failures and timeouts fall back to the static engine.
+7. The result is applied only while the effect is active and the run's state still
+   matches the requested state. Cleanup aborts on restart, state replacement, or
+   unmount. A microtask deferral avoids issuing the discarded Strict Mode setup's
+   request. Locale changes do not restart requests.
+8. Completed runs request an ending instead. A saved completed ending is reused.
 
-### Action Types
+Restart replaces the run and retains language. Refresh during generation restores
+the resolved stats/history and null event, then requests the pending event again.
+An AI event regenerated after refresh may differ, but the action is not replayed.
 
-- `safe` - Conventional, lower-risk choice
-- `risky` - Higher risk/reward, opportunity-focused
-- `absurd` - Non-traditional, unexpected, or playful option
+## Rules and compatibility assumptions
 
-### Ending IDs
+- Player stats: money, AI skill, network, energy, curiosity, chaos. World stats:
+  AI hype and economy. All stay within 0–100; turn is a separate counter.
+- Default length is five actions. `VITE_TURNS` accepts a positive safe integer.
+  Completion advances the counter, so five actions finish with `turn === 6`.
+- Static ending precedence is: curiosity ≥70 and chaos ≥70; otherwise chaos ≥75;
+  otherwise network ≥75; otherwise AI skill ≥75 and chaos <60; otherwise generalist.
+- Static IDs connect game content, translations, and history reconstruction.
+  AI action IDs contain timestamps; AI event IDs contain the turn number.
+- The save stores game state, nullable displayed event, locale, and nullable ending
+  under `fomo-simulator-save`. Numeric stats, history structure, actions, locale,
+  and version are validated. Invalid data is removed; there are no migrations.
+- Current AI responses use `choices` with numeric deltas. A legacy `events` format
+  with English `stat_hints` is also accepted. Both require three distinct action
+  types. Numeric deltas must be finite and are rounded/clamped to −100…100.
+- The detailed opening prompt describes a 20-turn arc independent of the actual
+  turn limit. Subsequent event requests use a generic prompt and the last three
+  history entries; ending requests include the full choice history.
+- AI text is English. Static localization falls back to supplied text for unknown
+  IDs. History reconstructs static actions; AI action types currently fall back
+  to `safe` because history does not store an action type.
+- Stats, action-type colors/badges, and debug turn status are development-only.
+  Pending generation and ending status are visible in production too.
 
-- `quiet_specialist` - High skill_ai, low chaos
-- `stable_generalist` - Balanced stats
-- `chaotic_innovator` - High chaos
-- `connected_builder` - High network
-- `delightfully_strange_person` - High curiosity + high chaos
+## Integrations and deployment
 
-## Engine Components
+The implementation uses `fetch`, not the declared `@anthropic-ai/sdk` package.
+Requests send the configured model, an API key header, Anthropic API version,
+and the direct-browser-access header to `/v1/messages`. The development proxy
+in `vite.config.ts` rewrites `/api/anthropic` to `https://api.anthropic.com`.
+The proxy forwards a browser-provided credential; it does not hold a server secret.
 
-### `state.ts` - Initial State
+Production hosting, server-held credentials, request rate limiting, retries,
+analytics, and remote saves are not implemented. See README for environment
+variables and the legacy encoded-target proxy convention. `.env*` files are
+ignored except `.env.example`; never place real keys in tracked files.
 
-```typescript
-createInitialPlayerState() → PlayerState
-// All stats start at 50 (money, skill_ai, network, energy, curiosity, chaos)
+## Verification
 
-createInitialWorldState() → WorldState
-// ai_hype: 50, economy: 50, turn: 1
+`npm run check` runs application/config/test type checking, ESLint including React
+Hooks rules, Vitest, and a production build. The GitHub Actions workflow runs it
+on Node 24 after `npm ci`. Compiler configuration uses bundler module resolution;
+type checking does not emit Vite configuration JavaScript.
 
-createInitialState(seed?) → GameState
-// Combines player, world, empty history, seed, completed: false
-```
+Tests are colocated with their subjects:
 
-### `events.ts` - Static Events
+- `src/engine/engine.test.ts`: exact stat effects, bounds, configured completion,
+  ending precedence, configuration validation, deterministic replay.
+- `src/services/storage.test.ts`: ready/pending saves, invalid versions and nested
+  data, malformed JSON, disabled browser storage.
+- `src/services/ai.test.ts`: request payload, parsing, HTTP/network failures,
+  offline mode, malformed endings, cancellation, and timeout fallback.
+- `src/useGame.test.tsx`: Strict Mode, restart during event/ending requests,
+  duplicate submissions, pending-turn refresh, saved ending reuse, unmount.
+- `src/App.test.tsx`: rendered offline play, ending/restart, language preservation,
+  and pending-state interaction.
 
-10 hardcoded events, each with 3 actions (safe/risky/absurd):
-
-1. `frontier-lab-hiring-wave` - AI lab job opportunities
-2. `friends-risky-ai-startup-invite` - Friend's startup offer
-3. `open-source-model-drops-overnight` - Open source model release
-4. `family-asks-still-doing-ai-stuff` - Family questioning your path
-5. `local-ai-meetup-explosion` - Meetup growth
-6. `productivity-collapse-week` - Burnout scenario
-7. `ai-astrology-app-goes-viral` - Weird AI trend
-8. `corporate-ai-policy-clampdown` - Corporate restrictions
-9. `weird-niche-tool-actually-finds-users` - Niche success
-10. `model-starts-giving-unreasonably-good-advice` - AI giving life advice
-
-### `generator.ts` - Event Selection
-
-```typescript
-generateTurnEvents(state) → DisplayedTurn
-```
-- Creates seeded PRNG from game seed + history hash
-- Excludes last picked event to avoid immediate repeats
-- Returns `{ currentEvent: Event }`
-
-### `resolver.ts` - Action Resolution
-
-```typescript
-resolveAction(state, event, action, displayedTurn) → GameState
-```
-- Applies `action.playerDelta` (clamped 0-100)
-- Applies `action.worldDelta` (clamped 0-100)
-- Creates `HistoryEntry` with result text and missed paths
-- Increments turn, checks turn >= 20 → sets `completed: true`
-
-### `endings.ts` - Ending Logic
-
-```typescript
-getEnding(state) → Ending
-```
-Checks final stat profile (at turn 20):
-- `curiosity >= 70 && chaos >= 70` → Delightfully Strange Person
-- `chaos >= 75` → Chaotic Innovator
-- `network >= 75` → Connected Builder
-- `skill_ai >= 75 && chaos < 60` → Quiet Specialist
-- Otherwise → Stable Generalist
-
-### `rng.ts` - Random Number Generator
-
-```typescript
-createRng(seed) → () => number
-// Seeded PRNG for deterministic replay
-
-randomInt(rng, min, max) → number
-// Generate random integer in range
-```
-
-### `utils.ts` - Utilities
-
-```typescript
-clamp(value, min, max) → number
-clampStat(value) → number  // Clamp to 0-100
-
-applyPlayerDelta(state, delta) → PlayerState
-applyWorldDelta(state, delta) → WorldState
-```
-
-## UI Components
-
-### `App.tsx` - Main Component
-
-- Manages game state and locale
-- Handles action selection flow
-- Saves/loads game from LocalStorage
-- Renders stats, current event, ending, and history
-
-### `StatPanel.tsx` - Stats Display
-
-- Player stats: Money, AI Skill, Network, Energy, Curiosity, Chaos
-- World stats: AI Hype, Economy, Turn
-
-### `EventCard.tsx` - Event Rendering
-
-- Shows event title and description
-- Renders 3 action buttons (styled by type: safe/risky/absurd)
-- Each button shows label, flavor text, and action type badge
-
-### `HistoryLog.tsx` - History Display
-
-- Shows past turns in reverse chronological order
-- Displays chosen action and missed paths
-- Localized metadata (turn number, event, action)
-
-## Services
-
-### `storage.ts` - Persistence
-
-```typescript
-loadSavedGame() → PersistedGame | null
-saveGame(data) → void
-clearSavedGame() → void
-```
-- Saves to LocalStorage with version validation
-- Auto-saves on every turn change
-- Loads previous game on startup (game continues on refresh)
-
-## Internationalization (`i18n.ts`)
-
-- UI text: en/zh translations
-- Event text: Localized titles, descriptions, action labels, flavors
-- Ending text: Localized titles and summaries
-- `getLocalizedHistoryEntry()` for localized history display
-
-## Game Flow
-
-```
-1. Load saved game OR create new game (turn 1)
-2. Display current event (from generator)
-3. Player clicks action
-4. Resolve action:
-   - Apply stat deltas
-   - Create history entry
-   - Increment turn
-   - Check if completed (turn >= 20)
-5. Save game state
-6. If not complete, generate next event
-7. If complete, show ending
-8. Repeat from step 2
-```
-
-## Tech Stack
-
-- **Framework**: React 18 with TypeScript
-- **Build tool**: Vite
-- **Styling**: CSS (see `src/index.css`)
-- **Persistence**: LocalStorage with JSON serialization
-- **i18n**: Custom en/zh localization
-
-## AI Integration Points
-
-For integrating AI to generate dynamic events/narratives:
-
-### Data Types to Add
-
-- Create `AIEvent` interface extending `Event` with `generated: boolean` flag
-- Add `generatedEventCache` to `GameState` for AI-generated events
-
-### Service Layer
-
-Create `src/services/ai.ts`:
-- Configuration: API key (environment variable), model selection
-- Functions: `generateEvent(context)`, `generateActions(eventContext)`, `narrateResult(choiceContext)`
-
-### Generator Updates
-
-- `generateTurnEvents()` can optionally call AI instead of picking static event
-- Fall back to static events if AI fails
-
-### Resolver Updates
-
-- Add AI narration for results in `resolveAction()`
-
-### Prompt Considerations
-
-- System prompt: Define anti-FOMO tone, non-judgmental exploration
-- Event context: Include current stats, world state, recent history
-- Action generation: Ensure safe/risky/absurd variety with stat implications
-- Result narration: Unique description fitting choice and context
+`src/test/setup.ts` clears storage and stubs network access to fail by default.
+Tests use jsdom rather than a real browser. They do not verify actual Anthropic
+availability, model quality, deployed proxy behavior, browser rendering, or
+cross-tab save coordination. Smoke-test dev and production preview for UI work.

@@ -1,6 +1,5 @@
 import { applyPlayerDelta, applyWorldDelta } from './utils';
 import type { Action, DisplayedTurn, Event, GameState, HistoryEntry } from './types';
-import { getMaxTurns } from './utils';
 
 function getMissedPaths(action: Action, displayedTurn: DisplayedTurn): string[] {
   return displayedTurn.currentEvent.actions
@@ -16,6 +15,7 @@ export function resolveAction(
   event: Event,
   action: Action,
   displayedTurn: DisplayedTurn,
+  maxTurns = 5,
 ): GameState {
   const currentTurn = state.world.turn;
   const player = applyPlayerDelta(state.player, action.playerDelta);
@@ -39,6 +39,6 @@ export function resolveAction(
       turn: currentTurn + 1,
     },
     history: [...state.history, historyEntry],
-    completed: currentTurn >= getMaxTurns(),
+    completed: currentTurn >= maxTurns,
   };
 }

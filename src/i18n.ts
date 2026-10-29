@@ -38,6 +38,7 @@ const UI_TEXT: Dictionary = {
     zh: '选择一个行动来进入下一回合。',
   },
   generating_event: { en: 'Generating new event...', zh: '正在生成新事件……' },
+  generating_ending: { en: 'Writing your ending...', zh: '正在书写你的结局……' },
   ai_generated: { en: 'AI Generated', zh: 'AI 生成' },
   static_event: { en: 'Random Event', zh: '随机事件' },
   ai_error: { en: 'AI failed, using random event', zh: 'AI 生成失败，使用随机事件' },

@@ -30,7 +30,30 @@ interface MessageParam {
 const ACTION_TYPES = ['safe', 'risky', 'absurd'] as const
 
 function clamp(value: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error('Stat deltas must be finite numbers')
+  }
   return Math.min(Math.max(Math.round(value), -100), 100)
+}
+
+interface RequestOptions {
+  signal?: AbortSignal
+  fetcher?: typeof fetch
+}
+
+function requestSignal(signal?: AbortSignal) {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  if (signal?.aborted) abort()
+  else signal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(abort, 30_000)
+  return {
+    signal: controller.signal,
+    cleanup() {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+    },
+  }
 }
 
 function buildCachedSystemPrompt(): MessageParam {
@@ -113,19 +136,23 @@ function parseAIResponse(text: string): GenerateChoicesResponse {
         }
       })
 
-      if (!actions.every(a => ACTION_TYPES.includes(a.type))) {
+      if (!actions.every(a => ACTION_TYPES.includes(a.type)) || new Set(actions.map(a => a.type)).size !== 3) {
         return { success: false, eventTitle: '', description: '', actions: [], error: 'Invalid action types' }
       }
 
       return {
         success: true,
-        eventTitle: data.event_title || 'AI Generated Event',
-        description: data.description || 'A new situation unfolds...',
+        eventTitle: String(data.event_title || 'AI Generated Event'),
+        description: String(data.description || 'A new situation unfolds...'),
         actions,
       }
     }
 
     if (data.choices && Array.isArray(data.choices) && data.choices.length === 3) {
+      if (typeof data.event_title !== 'string' || !data.event_title.trim()
+        || typeof data.description !== 'string' || !data.description.trim()) {
+        throw new Error('Event title and description are required')
+      }
       const actions: Action[] = data.choices.map((c: Record<string, unknown>, i: number) => {
         const pd = (c.player_delta as Record<string, number>) || {}
         const wd = (c.world_delta as Record<string, number>) || {}
@@ -149,7 +176,7 @@ function parseAIResponse(text: string): GenerateChoicesResponse {
         }
       })
 
-      if (!actions.every(a => ACTION_TYPES.includes(a.type))) {
+      if (!actions.every(a => ACTION_TYPES.includes(a.type)) || new Set(actions.map(a => a.type)).size !== 3) {
         return { success: false, eventTitle: '', description: '', actions: [], error: 'Invalid action types' }
       }
 
@@ -181,8 +208,10 @@ export async function generateEventWithAI(
   config: AIConfig,
   req: GenerateEventRequest,
   isFirstTurn = false,
+  options: RequestOptions = {},
 ): Promise<GenerateChoicesResponse> {
   const baseURL = config.baseURL
+  const request = requestSignal(options.signal)
 
   try {
     const targetURL = 'https://api.anthropic.com/v1/messages'
@@ -196,8 +225,9 @@ export async function generateEventWithAI(
 
     const messageContent = buildEventPrompt(req, isFirstTurn)
 
-    const response = await fetch(url, {
+    const response = await (options.fetcher ?? fetch)(url, {
       method: 'POST',
+      signal: request.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': config.apiKey,
@@ -213,7 +243,6 @@ export async function generateEventWithAI(
     })
 
     if (!response.ok) {
-      const err = await response.text()
       return { success: false, eventTitle: '', description: '', actions: [], error: `API error: ${response.status}` }
     }
 
@@ -227,6 +256,8 @@ export async function generateEventWithAI(
     return parseAIResponse(text)
   } catch (e) {
     return { success: false, eventTitle: '', description: '', actions: [], error: String(e) }
+  } finally {
+    request.cleanup()
   }
 }
 
@@ -281,7 +312,8 @@ function parseEndingResponse(text: string): GenerateEndingResponse {
     const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim()
     const data = JSON.parse(cleaned)
 
-    if (!data.title || !data.summary) {
+    if (typeof data.title !== 'string' || !data.title.trim()
+      || typeof data.summary !== 'string' || !data.summary.trim()) {
       return { success: false, title: '', summary: '', error: 'Invalid response format' }
     }
 
@@ -298,8 +330,10 @@ function parseEndingResponse(text: string): GenerateEndingResponse {
 export async function generateEndingWithAI(
   config: AIConfig,
   req: GenerateEndingRequest,
+  options: RequestOptions = {},
 ): Promise<GenerateEndingResponse> {
   const baseURL = config.baseURL
+  const request = requestSignal(options.signal)
 
   try {
     const targetURL = 'https://api.anthropic.com/v1/messages'
@@ -307,8 +341,9 @@ export async function generateEndingWithAI(
       ? `${baseURL}${encodeURIComponent(targetURL)}`
       : `${baseURL}/v1/messages`
 
-    const response = await fetch(url, {
+    const response = await (options.fetcher ?? fetch)(url, {
       method: 'POST',
+      signal: request.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': config.apiKey,
@@ -324,7 +359,6 @@ export async function generateEndingWithAI(
     })
 
     if (!response.ok) {
-      const err = await response.text()
       return { success: false, title: '', summary: '', error: `API error: ${response.status}` }
     }
 
@@ -338,6 +372,8 @@ export async function generateEndingWithAI(
     return parseEndingResponse(text)
   } catch (e) {
     return { success: false, title: '', summary: '', error: String(e) }
+  } finally {
+    request.cleanup()
   }
 }
 

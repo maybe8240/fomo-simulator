@@ -1,7 +1,6 @@
 import { STARTER_EVENTS } from './events';
 import { createRng, randomInt } from './rng';
 import type { DisplayedTurn, Event, GameState } from './types';
-import { generateEventWithAI, getAIConfig, isAIEnabled } from '../services/ai';
 
 function hashString(value: string): number {
   let hash = 0;
@@ -37,36 +36,12 @@ function pickRandomEvent(
   return pool[index];
 }
 
-export async function generateTurnEvents(state: GameState): Promise<DisplayedTurn> {
+export function generateTurnEvents(state: GameState): DisplayedTurn {
   const latestHistoryEntry = state.history[state.history.length - 1];
   const excludedIds = latestHistoryEntry
     ? new Set<string>([latestHistoryEntry.eventId])
     : new Set<string>();
   const rng = createRng(getTurnSeed(state));
-  const isFirstTurn = state.history.length === 0;
-
-  if (isAIEnabled()) {
-    console.log("AI Enabled...")
-    const aiConfig = getAIConfig();
-    if (aiConfig) {
-      const aiResult = await generateEventWithAI(aiConfig, {
-        playerState: state.player,
-        worldState: state.world,
-        recentHistory: state.history,
-      }, isFirstTurn);
-
-      if (aiResult.success && aiResult.actions.length === 3) {
-        const event: Event = {
-          id: `ai-${state.world.turn}`,
-          title: aiResult.eventTitle,
-          description: aiResult.description,
-          actions: aiResult.actions,
-        };
-        return { currentEvent: event, isAIGenerated: true };
-      }
-    }
-  }
-  console.log("AI disabled...")
   return {
     currentEvent: pickRandomEvent(STARTER_EVENTS, rng, excludedIds),
     isAIGenerated: false,

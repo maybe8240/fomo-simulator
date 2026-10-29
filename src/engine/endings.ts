@@ -1,5 +1,4 @@
 import type { Ending, GameState } from './types';
-import { generateEndingWithAI, getAIConfig, isAIEnabled } from '../services/ai';
 
 const STATIC_ENDINGS: Ending[] = [
   {
@@ -29,7 +28,7 @@ const STATIC_ENDINGS: Ending[] = [
   },
 ];
 
-function getStaticEnding(state: GameState): Ending {
+export function getEnding(state: GameState): Ending {
   const {
     skill_ai: skillAi,
     network,
@@ -54,27 +53,4 @@ function getStaticEnding(state: GameState): Ending {
   }
 
   return STATIC_ENDINGS[4];
-}
-
-export async function getEnding(state: GameState): Promise<Ending> {
-  if (isAIEnabled()) {
-    const aiConfig = getAIConfig();
-    if (aiConfig) {
-      const aiResult = await generateEndingWithAI(aiConfig, {
-        playerState: state.player,
-        worldState: state.world,
-        history: state.history,
-      });
-
-      if (aiResult.success) {
-        return {
-          id: 'ai_generated',
-          title: aiResult.title,
-          summary: aiResult.summary,
-        };
-      }
-    }
-  }
-
-  return getStaticEnding(state);
 }

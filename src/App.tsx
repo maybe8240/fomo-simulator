@@ -1,186 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-
-import { getEnding } from './engine/endings';
-import { STARTER_EVENTS } from './engine/events';
-import { generateTurnEvents } from './engine/generator';
-import { resolveAction } from './engine/resolver';
-import { createInitialState } from './engine/state';
 import { getLocalizedEnding, translate } from './i18n';
-import type { Locale } from './i18n';
-import type { Action, DisplayedTurn, Ending, Event, GameState } from './engine/types';
-import { clearSavedGame, loadSavedGame, saveGame } from './services/storage';
-import { isAIEnabled, getAIConfig } from './services/ai';
+import { defaultGameServices } from './services/game';
+import type { GameServices } from './services/game';
+import { useGame } from './useGame';
 import EventCard from './ui/EventCard';
 import HistoryLog from './ui/HistoryLog';
 import StatPanel from './ui/StatPanel';
 
-type AppState = {
-  gameState: GameState;
-  displayedTurn: DisplayedTurn;
-  locale: Locale;
-  isGenerating: boolean;
-};
-
-function createFreshAppState(locale: Locale = 'en'): AppState {
-  const gameState = createInitialState();
-
-  return {
-    gameState,
-    displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
-    locale,
-    isGenerating: false,
-  };
-}
-
-async function createFreshAppStateWithAI(locale: Locale = 'en'): Promise<AppState> {
-  const gameState = createInitialState();
-  const aiConfig = getAIConfig();
-
-  if (aiConfig) {
-    const displayedTurn = await generateTurnEvents(gameState);
-    return {
-      gameState,
-      displayedTurn,
-      locale,
-      isGenerating: false,
-    };
-  }
-
-  return {
-    gameState,
-    displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
-    locale,
-    isGenerating: false,
-  };
-}
-
-function App() {
-  const [{ gameState, displayedTurn, locale, isGenerating }, setAppState] = useState<AppState>(() => {
-    const savedGame = loadSavedGame();
-
-    if (savedGame?.displayedTurn) {
-      return {
-        gameState: savedGame.gameState,
-        displayedTurn: savedGame.displayedTurn,
-        locale: savedGame.locale,
-        isGenerating: false,
-      };
-    }
-
-    return createFreshAppState();
-  });
-  const [isResolving, setIsResolving] = useState(false);
-  const [isGeneratingEnding, setIsGeneratingEnding] = useState(false);
-  const [ending, setEnding] = useState<Ending | null>(() => {
-    const saved = loadSavedGame();
-    return saved?.ending ?? null;
-  });
-  const isResolvingRef = useRef(false);
-  const [isInitialized, setIsInitialized] = useState(() => {
-    const savedGame = loadSavedGame();
-    return savedGame?.displayedTurn !== undefined;
-  });
-
-  useEffect(() => {
-    if (!isInitialized && isAIEnabled() && getAIConfig()) {
-      setIsInitialized(true);
-      createFreshAppStateWithAI().then((initialState) => {
-        setAppState(initialState);
-      });
-    }
-  }, [isInitialized]);
-
-  const currentEvent = displayedTurn.currentEvent;
+function App({ services = defaultGameServices }: { services?: GameServices }) {
+  const { gameState, displayedTurn, locale, ending, isGenerating, isGeneratingEnding,
+    selectAction, setLocale, restart } = useGame(services);
+  const currentEvent = displayedTurn?.currentEvent;
   const localizedEnding = ending
     ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary)
     : null;
-
-  useEffect(() => {
-    if (gameState.completed && !ending && !isGeneratingEnding) {
-      setIsGeneratingEnding(true);
-      getEnding(gameState).then((result) => {
-        setEnding(result);
-        setIsGeneratingEnding(false);
-      });
-    }
-  }, [gameState.completed, ending, isGeneratingEnding]);
-
-  const handleSelectAction = async (event: Event, action: Action) => {
-    if (isResolvingRef.current || gameState.completed) {
-      return;
-    }
-
-    isResolvingRef.current = true;
-    setIsResolving(true);
-
-    try {
-      const nextGameState = resolveAction(
-        gameState,
-        event,
-        action,
-        displayedTurn,
-      );
-
-      if (nextGameState.completed) {
-        setAppState({
-          locale,
-          gameState: nextGameState,
-          displayedTurn,
-          isGenerating: false,
-        });
-        return;
-      }
-
-      setAppState((current) => ({
-        ...current,
-        gameState: nextGameState,
-        isGenerating: true,
-      }));
-
-      const newDisplayedTurn = await generateTurnEvents(nextGameState);
-
-      setAppState((current) => ({
-        ...current,
-        gameState: nextGameState,
-        displayedTurn: newDisplayedTurn,
-        isGenerating: false,
-      }));
-    } finally {
-      isResolvingRef.current = false;
-      setIsResolving(false);
-    }
-  };
-
-  const handleRestart = () => {
-    isResolvingRef.current = false;
-    setIsResolving(false);
-    clearSavedGame();
-    setIsInitialized(false);
-    setEnding(null);
-
-    if (isAIEnabled() && getAIConfig()) {
-      setAppState({
-        gameState: createInitialState(),
-        displayedTurn: { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
-        locale,
-        isGenerating: true,
-      });
-      createFreshAppStateWithAI(locale).then((initialState) => {
-        setAppState(initialState);
-      });
-    } else {
-      setAppState(createFreshAppState(locale));
-    }
-  };
-
-  useEffect(() => {
-    saveGame({
-      gameState,
-      displayedTurn,
-      locale,
-      ending,
-    });
-  }, [displayedTurn, gameState, locale, ending]);
 
   return (
     <main className="app-shell">
@@ -194,31 +26,21 @@ function App() {
             <div className="language-switcher" aria-label={translate(locale, 'language')}>
               <button
                 className={`language-button${locale === 'en' ? ' language-button--active' : ''}`}
-                onClick={() =>
-                  setAppState((current) => ({
-                    ...current,
-                    locale: 'en',
-                  }))
-                }
+                onClick={() => setLocale('en')}
                 type="button"
               >
                 {translate(locale, 'english')}
               </button>
               <button
                 className={`language-button${locale === 'zh' ? ' language-button--active' : ''}`}
-                onClick={() =>
-                  setAppState((current) => ({
-                    ...current,
-                    locale: 'zh',
-                  }))
-                }
+                onClick={() => setLocale('zh')}
                 type="button"
               >
                 {translate(locale, 'chinese')}
               </button>
               <button
                 className="restart-button restart-button--small"
-                onClick={handleRestart}
+                onClick={restart}
                 type="button"
                 title={translate(locale, 'restart_run')}
               >
@@ -233,17 +55,17 @@ function App() {
         <section className="section-block">
           <div className="panel-heading">
             <h2>{translate(locale, 'current_event')}</h2>
-            {import.meta.env.DEV && displayedTurn.isAIGenerated && (
+            {import.meta.env.DEV && displayedTurn?.isAIGenerated && (
               <span className="event-badge event-badge--ai">{translate(locale, 'ai_generated')}</span>
             )}
           </div>
-          <EventCard
-            disabled={isResolving || gameState.completed}
+          {currentEvent ? <EventCard
+            disabled={gameState.completed}
             event={currentEvent}
             key={currentEvent.id}
             locale={locale}
-            onSelectAction={handleSelectAction}
-          />
+            onSelectAction={selectAction}
+          /> : <p role="status">{translate(locale, 'generating_event')}</p>}
         </section>
 
         {localizedEnding ? (
@@ -253,10 +75,12 @@ function App() {
             </div>
             <p className="ending-title">{localizedEnding.title}</p>
             <p className="status">{localizedEnding.summary}</p>
-            <button className="restart-button" onClick={handleRestart} type="button">
+            <button className="restart-button" onClick={restart} type="button">
               {translate(locale, 'restart_run')}
             </button>
           </section>
+        ) : isGeneratingEnding ? (
+          <p role="status">{translate(locale, 'generating_ending')}</p>
         ) : (
           import.meta.env.DEV && (
             <section className="panel">
@@ -266,9 +90,7 @@ function App() {
               <p className="muted-text">
                 {isGenerating
                   ? translate(locale, 'generating_event')
-                  : isResolving
-                    ? translate(locale, 'resolving')
-                    : translate(locale, 'pick_action')}
+                  : translate(locale, 'pick_action')}
               </p>
             </section>
           )
