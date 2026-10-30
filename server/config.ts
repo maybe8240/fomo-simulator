@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { requireApiKey } from './claude.ts';
 
 export interface ServerConfig {
   production: boolean;
@@ -36,12 +37,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     || !['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid APP_ORIGIN');
   if (production && !env.APP_ORIGIN) throw new Error('Production requires APP_ORIGIN');
   const aiEnabled = env.AI_ENABLED === 'true';
-  if (aiEnabled) {
-    for (const name of ['ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID',
-      'ANTHROPIC_SERVICE_ACCOUNT_ID', 'ANTHROPIC_WORKSPACE_ID']) {
-      if (!env[name]?.trim()) throw new Error(`Missing required environment variable: ${name}`);
-    }
-  }
+  if (aiEnabled) requireApiKey(env);
   const model = env.CLAUDE_MODEL ?? 'claude-haiku-4-5';
   if (!/^claude-[a-zA-Z0-9.-]{1,80}$/.test(model)) throw new Error('Invalid CLAUDE_MODEL');
   return {

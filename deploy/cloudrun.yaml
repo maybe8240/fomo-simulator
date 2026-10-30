@@ -38,14 +38,11 @@ spec:
                 secretKeyRef:
                   name: fomo-access-password
                   key: '1'
-            - name: ANTHROPIC_FEDERATION_RULE_ID
-              value: YOUR_FEDERATION_RULE_ID
-            - name: ANTHROPIC_ORGANIZATION_ID
-              value: YOUR_ORGANIZATION_ID
-            - name: ANTHROPIC_SERVICE_ACCOUNT_ID
-              value: YOUR_ANTHROPIC_SERVICE_ACCOUNT_ID
-            - name: ANTHROPIC_WORKSPACE_ID
-              value: YOUR_WORKSPACE_ID
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fomo-anthropic-api-key
+                  key: '1'
             - name: MAX_AI_REQUESTS_PER_DAY
               value: '100'
             - name: MAX_AI_CONCURRENT

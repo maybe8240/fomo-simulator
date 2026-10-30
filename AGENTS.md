@@ -21,7 +21,7 @@
   with a newer Vite major as part of unrelated work.
 - Start locally with `npm run dev`. No `.env` or credentials are required.
 - To exercise the local API, also run `npm run dev:server` in a second terminal.
-  The Node server defaults to static generation; local AI needs a Google workload.
+  The Node server defaults to static generation; local AI needs a server-side `ANTHROPIC_API_KEY`.
 - Run `npm run check` before handing off code changes. During development use
   `npm test -- <test-file>` and `npm run typecheck` for focused feedback.
 - For dependency changes, also run `npm run audit` and report its result. It
@@ -50,7 +50,7 @@
 - `src/services/config.ts` reads browser flags. `services/game.ts` provides static
   fallback and accepts an injected transport; `services/ai.ts` only calls the
   same-origin `/api/game/*` endpoints. Never add provider credentials to `VITE_*`.
-- `server/` owns federation, prompts, model configuration, response validation,
+- `server/` owns provider authentication, prompts, model configuration, response validation,
   HTTP access controls, and request limits. Keep server imports out of `src/`.
   Shared engine imports use explicit `.ts` extensions for Node 24's native runner.
 - `src/useGame.ts` coordinates a run. A null displayed event means generation is

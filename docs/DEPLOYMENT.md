@@ -12,18 +12,13 @@ deployed or IAM policy changed by local builds/tests.
 2. Create a dedicated runtime account such as
    `fomo-runtime@YOUR_PROJECT_ID.iam.gserviceaccount.com`. Do not create a JSON key
    or grant it Owner/Editor. Build/deployer identities have separate permissions.
-3. In Claude Console → Workload identity → Connect workload → Google Cloud, use
-   issuer `https://accounts.google.com`, audience `https://api.anthropic.com`, and
-   match both the runtime account's numeric unique ID (`sub`) and email. Create a
-   dedicated Anthropic service account/rule scoped to the intended workspace.
-   Record the four `ANTHROPIC_*` IDs. Set workspace usage/spending limits.
-4. Create Secret Manager secret `fomo-access-password` with a randomly generated
-   password of at least 16 characters. Grant the runtime account Secret Accessor
-   on this secret only. Do not place the password in the manifest, command history,
-   browser build, or Git. Use the console's secret input or a protected input file.
-
-References: [Google service identities](https://docs.cloud.google.com/run/docs/configuring/services/service-identity),
-[Anthropic federation](https://platform.claude.com/docs/en/manage-claude/wif-providers/gcp).
+3. Create an Anthropic API key in the intended Claude Console workspace and set
+   workspace usage/spending limits.
+4. Create Secret Manager secrets `fomo-access-password` (a random password of at
+   least 16 characters) and `fomo-anthropic-api-key` (the Anthropic API key). Grant
+   the runtime account Secret Accessor on these two secrets only. Do not place
+   secret values in the manifest, command history, browser build, or Git. Use the
+   console's secret input or a protected input file.
 
 ## Build an image
 
@@ -53,8 +48,9 @@ and `CLAUDE_MODEL` remain runtime settings, never browser build arguments.
 ## Deploy privately first
 
 Copy/edit `deploy/cloudrun.yaml` and replace every `YOUR_*` placeholder, including
-the image tag, runtime service-account email, federation IDs, and HTTPS service
-origin. Use the exact Cloud Run service URL (no trailing slash). For a new service
+the image tag, runtime service-account email, and HTTPS service origin. Verify the
+secret names and version references. Use the exact Cloud Run service URL (no
+trailing slash). For a new service
 whose generated URL is not known, make a private first deployment with a temporary
 HTTPS origin, retrieve its URL, then update `APP_ORIGIN` before browser testing.
 Same-origin API POSTs are intentionally blocked until that value matches.
@@ -85,19 +81,18 @@ and durable quotas before broad public use.
 ## Verify the actual deployment
 
 1. Check the startup probe and `/healthz`. A healthy response does not prove
-   federation works; credential exchange occurs only when content is requested.
+   the API key works; Claude is called only when content is requested.
 2. Confirm HTML/API requests without application login are rejected, and cross-site
    or malformed API requests fail without making Claude calls.
-3. Play a complete AI run in the intended workspace. Check Claude Console's
-   authentication events to verify the matched rule/account and usage attribution.
-4. Exercise a request after token expiry to verify identity acquisition and SDK
-   refresh. No metadata token file or long-lived API key should be configured.
+3. Play a complete AI run in the intended workspace. Check Claude Console usage
+   to confirm requests are attributed to the intended key/workspace.
+4. To rotate the API key, add a new Secret Manager version, update the manifest
+   version reference, and deploy a new revision. Verify it before revoking the old key.
 5. Verify the browser bundle/network carries no provider credentials, model
    settings, or direct Claude requests. Requests should target `/api/game/*`.
 6. Verify rate/quota rejection and static fallback. Limits reset per process and
    during revision rollouts; provider spending controls remain necessary.
 
-The standalone integration class can also run in a Google workload or one-off
-Cloud Run Job with the same runtime identity and federation settings. It makes a
-real billable call and is not executed by automated CI. Local Windows and Cloud
-Shell sessions alone do not have that runtime's metadata identity.
+The standalone integration class uses the same API key client. Run
+`npm run test:integration:claude` with `ANTHROPIC_API_KEY` in the environment or
+local `.env.server`. It makes a real billable call and is not executed by CI.

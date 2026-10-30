@@ -10,7 +10,7 @@ import { readConfig } from './config';
 import type { ServerConfig } from './config';
 import { createGenerationService } from './generation';
 import type { GenerationService } from './generation';
-import { createFederatedClient } from './federation';
+import { createClaudeClient } from './claude';
 import { createInitialState } from '../src/engine/state';
 import { STARTER_EVENTS } from '../src/engine/events';
 import type { DisplayedTurn } from '../src/engine/types';
@@ -169,7 +169,15 @@ describe('HTTP boundary', () => {
 });
 
 describe('production configuration', () => {
-  it('fails closed without credentials, HTTPS origin, or federation settings', () => {
+  it('enables AI with only an API key and allows static mode without a key', () => {
+    expect(readConfig({ AI_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-api-key' }).aiEnabled).toBe(true);
+    expect(readConfig({}).aiEnabled).toBe(false);
+  });
+  it.each(['', ' '])('rejects an empty API key when AI is enabled (%s)', (key) => {
+    expect(() => readConfig({ AI_ENABLED: 'true', ANTHROPIC_API_KEY: key }))
+      .toThrow('Missing required environment variable: ANTHROPIC_API_KEY');
+  });
+  it('fails closed without credentials, HTTPS origin, or an API key', () => {
     expect(() => readConfig({ NODE_ENV: 'production' })).toThrow();
     expect(() => readConfig({ NODE_ENV: 'production', APP_ACCESS_USER: 'player', APP_ACCESS_PASSWORD: 'short' })).toThrow();
     expect(() => readConfig({ AI_ENABLED: 'true' })).toThrow();
@@ -177,25 +185,26 @@ describe('production configuration', () => {
   });
 });
 
-describe('HTTP → real SDK → mocked Google/Claude integration', () => {
-  it('exchanges metadata identity, fixes the model/prompt server-side, and validates the response', async () => {
+describe('HTTP → real SDK → mocked Claude integration', () => {
+  it('authenticates with an API key, fixes the model/prompt server-side, and validates the response', async () => {
     const payload = { event_title: 'An event', description: 'A dilemma.', choices: ['safe', 'risky', 'absurd'].map((type) => ({
       type, label: 'Choice ' + type, flavor: 'A detail.', player_delta: { money: 3.7 }, world_delta: {},
     })) };
     const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response('fake.identity.jwt'))
-      .mockResolvedValueOnce(json({ access_token: 'fake-access-token', token_type: 'Bearer', expires_in: 600 }))
       .mockResolvedValueOnce(json({ content: [{ type: 'text', text: JSON.stringify(payload) }] }));
-    const client = createFederatedClient({ ANTHROPIC_FEDERATION_RULE_ID: 'fdrl_test', ANTHROPIC_ORGANIZATION_ID: 'test-org' }, fetcher);
+    const client = createClaudeClient({ ANTHROPIC_API_KEY: 'test-api-key' }, fetcher);
     generation = createGenerationService(client, 'claude-haiku-4-5');
     await start();
     const result = await send();
     expect(result.status).toBe(200);
     expect(JSON.parse(result.text).currentEvent.actions[0].playerDelta.money).toBe(4);
-    expect(result.text).not.toContain('fake-access-token');
-    expect(fetcher).toHaveBeenCalledTimes(3);
-    const request = JSON.parse(String(fetcher.mock.calls[2][1]?.body));
+    expect(result.text).not.toContain('test-api-key');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+    expect(headers.get('x-api-key')).toBe('test-api-key');
+    expect(headers.has('authorization')).toBe(false);
+    const request = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(request.model).toBe('claude-haiku-4-5');
     expect(request.system).toContain('YOUR VOICE');
     expect(request.max_tokens).toBe(2048);

@@ -20,7 +20,7 @@ credential handling. Plain CSS and English/Chinese dictionaries remain in `src/`
 | `server/index.ts` | Configuration, listen on `PORT`, graceful shutdown |
 | `server/app.ts` | HTTP routes, authentication, origin/body/state validation, limits, static allowlist, security headers |
 | `server/config.ts` | Validate server-only environment, require production access controls |
-| `server/federation.ts` | Google metadata JWT → Anthropic SDK token provider; shared with smoke test |
+| `server/claude.ts` | Server-only API key validation and Anthropic SDK client; shared with smoke test |
 | `server/generation.ts` | Server model/token budgets, SDK Messages calls, validate normalized output |
 | `server/prompts.ts`, `server/narrator.ts` | Prompt construction and legacy/current AI response normalization |
 | `integration/` | Standalone live smoke-test class/runner and offline SDK transport tests |
@@ -44,8 +44,8 @@ integration markers in the browser artifact.
 5. The server checks access, method, content type, origin, body size, bounded state,
    phase, and quota. It never forwards arbitrary client prompts/options upstream.
 6. With server AI off, static generation is returned. With AI on, the shared SDK
-   client obtains metadata identity, federates to the configured Claude account,
-   and calls Messages with server-owned prompts/model/token limits.
+   client authenticates using the server API key and calls Messages with
+   server-owned prompts/model/token limits.
 7. Server parsing enforces three distinct action types, finite rounded/clamped
    deltas, and bounded strings. Invalid output/failures become generic 502s. The
    frontend also validates output and uses static content on failure.
@@ -69,10 +69,10 @@ integration markers in the browser artifact.
 - Input is limited to 32 KiB, 100 history entries, bounded strings, and 0–100
   stats. Client state is not an authoritative competitive game record. Prompt
   history is untrusted narrative data; Claude has no tools or secret prompt data.
-- Metadata/SDK fetches use fixed destinations, reject redirects, and have 30-second
+- SDK fetches use a fixed HTTPS destination, reject redirects, and have 30-second
   limits. HTTP generation wait is bounded separately (35 seconds by default),
-  even when an injected service ignores cancellation. A credential exchange
-  already running inside the SDK can continue until its transport timeout.
+  even when an injected service ignores cancellation. The API key is validated
+  at startup when AI is enabled; static mode requires no provider credentials.
 - No provider error bodies, credentials, or history are logged or returned.
   Browser requests have no provider key or upstream model/URL configuration.
 
@@ -96,10 +96,10 @@ action badges/colors, and debug status remain development-only.
 checks client artifacts. `npm run audit` includes development dependencies. CI
 also builds the image. Tests include engine replay/bounds, storage, React lifecycle,
 same-origin client fallbacks, server HTTP access/limits/validation, generation
-parsing, and HTTP → real SDK → mocked Google/Claude requests. Unexpected global
+parsing, and HTTP → real SDK → mocked Claude requests. Unexpected global
 fetches fail; Node HTTP tests use ephemeral local ports and fake upstreams.
 
-`npm run test:integration:claude` alone performs a live billable federation check.
-It requires an actual Google workload identity and is never part of CI. Automated
-tests do not establish live federation, model availability, deployed IAM policy,
-or browser visual behavior. See README and deployment docs for operator checks.
+`npm run test:integration:claude` alone performs a live billable API key check.
+It requires a server-side `ANTHROPIC_API_KEY` and is never part of CI. Automated
+tests do not establish live API key validity, model availability, deployed IAM
+policy, or browser visual behavior. See README and deployment docs for operator checks.

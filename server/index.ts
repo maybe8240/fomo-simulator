@@ -1,11 +1,11 @@
 import { readConfig } from './config.ts';
 import { createApp } from './app.ts';
-import { createFederatedClient } from './federation.ts';
+import { createClaudeClient } from './claude.ts';
 import { createGenerationService } from './generation.ts';
 
 try {
   const config = readConfig();
-  const client = config.aiEnabled ? createFederatedClient() : null;
+  const client = config.aiEnabled ? createClaudeClient() : null;
   const server = createApp(config, createGenerationService(client, config.model));
   server.listen(config.port, config.host, () => {
     console.log(`FOMO server listening on ${config.host}:${config.port}; AI ${config.aiEnabled ? 'enabled' : 'disabled'}`);

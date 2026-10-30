@@ -3,7 +3,7 @@
 A narrative life game set in the AI era: choose safe, risky, or absurd paths,
 change player/world stats, and receive an ending. React + TypeScript + Vite 8
 provide the UI; a Node 24 server serves the build and generates content through
-Claude using Google workload identity federation. Static English/Chinese content
+Claude using a server-side Anthropic API key. Static English/Chinese content
 works without credentials. AI content is English.
 
 ## Local startup
@@ -25,8 +25,9 @@ npm run dev:server
 The backend listens on `127.0.0.1:3001`. Vite forwards `/api/game/*` to it. To
 exercise that transport, copy `.env.example` to `.env`, set `VITE_AI_ENABLED=true`,
 and restart Vite. The backend defaults to static generation until `AI_ENABLED`
-is enabled on the server. Normal local Windows machines cannot obtain Cloud Run
-metadata tokens, so use static mode or mocked tests locally.
+is enabled on the server. For local AI, copy `.env.server.example` to
+`.env.server`, set `AI_ENABLED=true` and `ANTHROPIC_API_KEY`, then restart the
+backend. Keep the key in `.env.server`, never in the browser `.env` file.
 
 Stop dev servers before reinstalling dependencies if Windows reports locked
 native files. Use `npm.cmd` if PowerShell execution policy blocks `npm.ps1`.
@@ -51,15 +52,12 @@ the container reads its runtime environment directly. Never commit actual values
 | --- | --- |
 | `NODE_ENV` | `production` in the container; development otherwise |
 | `PORT` | `3001`; container uses `8080` |
-| `AI_ENABLED` | `false`; `true` enables Claude through federation |
+| `AI_ENABLED` | `false`; `true` enables Claude with an API key |
 | `CLAUDE_MODEL` | `claude-haiku-4-5`; selected by the server |
 | `APP_ORIGIN` | `http://localhost:5173` locally; explicit HTTPS origin required in production, with no trailing slash |
 | `APP_ACCESS_USER` | Required in production; HTTP Basic username |
 | `APP_ACCESS_PASSWORD` | Required in production, at least 16 characters; use Secret Manager |
-| `ANTHROPIC_FEDERATION_RULE_ID` | Required when server AI is enabled |
-| `ANTHROPIC_ORGANIZATION_ID` | Required when server AI is enabled |
-| `ANTHROPIC_SERVICE_ACCOUNT_ID` | Required when server AI is enabled |
-| `ANTHROPIC_WORKSPACE_ID` | Required when server AI is enabled |
+| `ANTHROPIC_API_KEY` | Required when server AI is enabled; server-only secret |
 | `MAX_AI_REQUESTS_PER_DAY` | `100`, per instance, UTC day |
 | `MAX_AI_CONCURRENT` | `2`, per instance |
 | `AI_REQUEST_INTERVAL_MS` | `3100`, minimum interval between generation starts |
@@ -70,18 +68,12 @@ Use the exact development origin you open in the browser: if using
 build at port 3001, set `APP_ORIGIN=http://127.0.0.1:3001` while keeping development
 mode; a production-mode server expects HTTPS termination such as Cloud Run.
 
-## Federation and access controls
+## API key and access controls
 
-Attach a dedicated Google service account to Cloud Run. In Claude Console,
-register the Google issuer `https://accounts.google.com` and restrict the rule to
-that account's numeric `sub` and `email`, with audience `https://api.anthropic.com`.
-See [Anthropic's Google Cloud walkthrough](https://platform.claude.com/docs/en/manage-claude/wif-providers/gcp).
-
-`server/federation.ts` obtains Google identity tokens from metadata, exchanges
-them using the Anthropic SDK, and lets the SDK cache/refresh access tokens. No
-Google JSON key, Anthropic API key, or manually maintained token file is needed.
-The API destination is fixed to Anthropic HTTPS; environment API-key/auth-token
-overrides are disabled. Tokens stay on the server and raw SDK errors are hidden.
+`server/claude.ts` creates the Anthropic SDK client using `ANTHROPIC_API_KEY`.
+The API destination is fixed to Anthropic HTTPS; inherited bearer-token and
+API-host overrides are disabled. The key stays on the server and raw SDK errors
+are hidden. Use `.env.server` locally and Secret Manager in Cloud Run.
 
 Production requires a password and HTTPS origin. HTTP Basic protects the HTML,
 assets, and API; browsers provide a login prompt. Cloud Run terminates HTTPS and
@@ -120,18 +112,17 @@ in this noncompetitive game, but are bounded before entering server prompts.
 | `npm run test:watch` | Watch offline tests |
 | `npm run check` | Type-check, lint, test, and production build |
 | `npm run audit` | Network advisory check for all dependencies; low severity or higher fails |
-| `npm run test:integration:claude` | Explicit live federation smoke test in a Google workload |
+| `npm run test:integration:claude` | Explicit live API key smoke test |
 
 CI runs audit and check, then builds the Docker image. Automated tests block
 unexpected network access; backend HTTP tests use a local server and inject
-mocked Google/Claude transports. No credentials are needed for CI. Vite 5's
+mocked Claude transports. No credentials are needed for CI. Vite 5's
 JavaScript compilation targets are explicitly retained during the Vite 8 upgrade.
 
 The separate integration runner makes a billable request with `claude-opus-5-5`,
-1024 output tokens, and `Hello from Cloud Run`. It uses the same federation client
-as the backend, prints only returned text, and is never run automatically. Supply
-the federation environment variables inside a Google workload; the runner does
-not load `.env` itself. Cloud Shell alone does not assume your runtime identity.
+1024 output tokens, and `Hello from Cloud Run`. It uses the same API key client
+as the backend, prints only returned text, and is never run automatically. It
+loads `.env.server` if present, or reads `ANTHROPIC_API_KEY` from the environment.
 
 ## Deployment and game state
 

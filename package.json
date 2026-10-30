@@ -16,7 +16,7 @@
     "typecheck": "tsc --project tsconfig.app.json && tsc --project tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration:claude": "node integration/run-claude-federation.ts",
+    "test:integration:claude": "node --env-file-if-exists=.env.server integration/run-claude.ts",
     "lint": "eslint . --max-warnings 0",
     "audit": "npm audit --audit-level=low",
     "check": "npm run typecheck && npm run lint && npm test && npm run build"
