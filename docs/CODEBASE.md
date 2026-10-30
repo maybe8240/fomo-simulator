@@ -1,117 +1,105 @@
 # Codebase map
 
-FOMO Simulator is a React 18 + TypeScript browser application built with Vite 5.
-It has no router, application server, remote database, or authentication. Plain
-CSS lives in `src/index.css`; English/Chinese dictionaries live in `src/i18n.ts`.
+React 18 + TypeScript + Vite 8 render a browser game. A Node 24 HTTP server serves
+the production build and owns Claude integration. Saves remain in localStorage;
+there is no database. The same image serves frontend and API to avoid cross-origin
+credential handling. Plain CSS and English/Chinese dictionaries remain in `src/`.
 
-## Entry points and ownership
+## Ownership
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` → `src/main.tsx` | Mount `App` under React Strict Mode |
-| `src/App.tsx` | Render the run, language controls, pending status, and ending; accepts injected `GameServices` |
-| `src/useGame.ts` | Load/save a run, accept choices, restart, and coordinate cancellable async work |
-| `src/engine/types.ts` | Player/world stats, events, actions, history, and ending contracts |
-| `src/engine/state.ts` | Initial stats at 50, turn 1, optional explicit seed |
-| `src/engine/events.ts` | Ten static events with safe/risky/absurd choices |
-| `src/engine/generator.ts`, `rng.ts` | Synchronous seeded event selection based on seed and history; excludes the previous event |
-| `src/engine/resolver.ts`, `utils.ts` | Immutable stat updates, 0–100 clamping, history, and completion |
-| `src/engine/endings.ts` | Synchronous stat-based ending with explicit precedence |
-| `src/services/config.ts` | Validate configured turn count and select optional AI configuration |
-| `src/services/game.ts` | Async event/ending interface, optional AI calls, static fallbacks, injectable fetch |
-| `src/services/ai.ts` | Anthropic Messages HTTP, prompts, normalization, 30-second timeout, cancellation |
-| `src/prompts/narrator.ts` | Detailed opening narrator system prompt |
-| `src/services/storage.ts` | Validate and persist schema-version-1 saves in localStorage |
-| `src/ui/` | Event choices, development stats, and newest-first history |
+| `index.html` → `src/main.tsx` → `src/App.tsx` | React Strict Mode, UI, controls, endings |
+| `src/useGame.ts` | Save/load, accept choices, cancel stale generation, restart |
+| `src/engine/` | Types, initial state, ten static events, seeded RNG, immutable resolution, endings, bounded API validators |
+| `src/services/config.ts` | Browser flags and turn count |
+| `src/services/ai.ts` | Credential-free, same-origin `/api/game/*` POST requests, cancellation and timeout |
+| `src/services/game.ts` | Validate API output and fall back to static generation |
+| `src/services/storage.ts` | Validate and persist version-1 saves |
+| `src/ui/`, `src/i18n.ts`, `src/index.css` | Rendering, localization, styling |
+| `server/index.ts` | Configuration, listen on `PORT`, graceful shutdown |
+| `server/app.ts` | HTTP routes, authentication, origin/body/state validation, limits, static allowlist, security headers |
+| `server/config.ts` | Validate server-only environment, require production access controls |
+| `server/claude.ts` | Server-only API key validation and Anthropic SDK client; shared with smoke test |
+| `server/generation.ts` | Server model/token budgets, SDK Messages calls, validate normalized output |
+| `server/prompts.ts`, `server/narrator.ts` | Prompt construction and legacy/current AI response normalization |
+| `integration/` | Standalone live smoke-test class/runner and offline SDK transport tests |
+| `Dockerfile`, `deploy/cloudrun.yaml` | Non-root production image and private-by-default Cloud Run configuration |
 
-The engine has no React, environment, storage, or network dependencies. The
-`GameServices` interface supplies `aiEnabled`, `maxTurns`, `generateTurn`, and
-`generateEnding`; both async methods receive an `AbortSignal`. The production
-adapter is created once from Vite configuration. Tests can inject controlled
-promises or fake HTTP without changing engine behavior.
+Node 24 natively strips erasable TypeScript. Server/engine runtime imports use
+explicit `.ts` extensions, allowing one engine implementation in both runtimes
+without a second compilation pipeline or another server framework. Server code
+is never imported into the frontend. Build verification rejects server-only
+integration markers in the browser artifact.
 
-## A choice through the application
+## End-to-end choice
 
-1. `useGame` loads a valid save. A fresh offline run shows the first static event;
-   a fresh AI run starts with a null displayed event and requests its opening.
-2. `EventCard` forwards the selected event/action to `useGame.selectAction`.
-3. The updater rejects stale, duplicate, or completed-run submissions, then calls
-   `resolveAction` with the configured turn limit.
-4. The resolver applies deltas, records the selected and missed paths, and advances
-   the turn. It marks completion when the resolved turn reaches the limit.
-5. For an unfinished run, the displayed event becomes null. The save effect stores
-   this pending state, and the generation effect asks `GameServices` for an event.
-6. The adapter requests AI content if configured, otherwise chooses static content.
-   HTTP/network/parsing failures and timeouts fall back to the static engine.
-7. The result is applied only while the effect is active and the run's state still
-   matches the requested state. Cleanup aborts on restart, state replacement, or
-   unmount. A microtask deferral avoids issuing the discarded Strict Mode setup's
-   request. Locale changes do not restart requests.
-8. Completed runs request an ending instead. A saved completed ending is reused.
+1. `useGame` restores a save or creates a run. Static browser mode shows the first
+   starter event; API mode requests an opening event.
+2. `EventCard` forwards a choice. The updater rejects duplicate/stale selections,
+   applies clamped deltas, appends history, and increments the turn.
+3. An unfinished run sets its event to null. Persistence records this pending
+   state and generation begins. Refresh resumes the pending event, not the action.
+4. The frontend posts only `{ state }` to `/api/game/event` or `/api/game/ending`.
+5. The server checks access, method, content type, origin, body size, bounded state,
+   phase, and quota. It never forwards arbitrary client prompts/options upstream.
+6. With server AI off, static generation is returned. With AI on, the shared SDK
+   client authenticates using the server API key and calls Messages with
+   server-owned prompts/model/token limits.
+7. Server parsing enforces three distinct action types, finite rounded/clamped
+   deltas, and bounded strings. Invalid output/failures become generic 502s. The
+   frontend also validates output and uses static content on failure.
+8. Effect cleanup aborts work and identity checks discard old results after restart
+   or unmount. Completed endings are persisted and reused on reload.
 
-Restart replaces the run and retains language. Refresh during generation restores
-the resolved stats/history and null event, then requests the pending event again.
-An AI event regenerated after refresh may differ, but the action is not replayed.
+## Security and operational tradeoffs
 
-## Rules and compatibility assumptions
+- Production starts only with an HTTPS `APP_ORIGIN`, username, and >=16-character
+  password. Shared HTTP Basic credentials suit private play; no per-user accounts
+  or login-session store is implemented. Cloud Run IAM provides an additional
+  private deployment boundary. See deployment instructions for both layers.
+- HTTPS is terminated by Cloud Run; the server requires its forwarded HTTPS
+  indication in production. Local development binds loopback and can omit login.
+- Only health, entry HTML, and allowlisted built asset paths are served; resolved
+  files must remain inside `dist`, including after symlink resolution.
+- Global process limits avoid trusting client-supplied forwarded IPs. They bound
+  ingress, concurrent generation, minimum intervals, and attempted calls/day.
+  Restarts reset them; a multi-instance/public product needs durable/shared quotas.
+  Set provider-side spending limits for an actual account-wide cost boundary.
+- Input is limited to 32 KiB, 100 history entries, bounded strings, and 0–100
+  stats. Client state is not an authoritative competitive game record. Prompt
+  history is untrusted narrative data; Claude has no tools or secret prompt data.
+- SDK fetches use a fixed HTTPS destination, reject redirects, and have 30-second
+  limits. HTTP generation wait is bounded separately (35 seconds by default),
+  even when an injected service ignores cancellation. The API key is validated
+  at startup when AI is enabled; static mode requires no provider credentials.
+- No provider error bodies, credentials, or history are logged or returned.
+  Browser requests have no provider key or upstream model/URL configuration.
 
-- Player stats: money, AI skill, network, energy, curiosity, chaos. World stats:
-  AI hype and economy. All stay within 0–100; turn is a separate counter.
-- Default length is five actions. `VITE_TURNS` accepts a positive safe integer.
-  Completion advances the counter, so five actions finish with `turn === 6`.
-- Static ending precedence is: curiosity ≥70 and chaos ≥70; otherwise chaos ≥75;
-  otherwise network ≥75; otherwise AI skill ≥75 and chaos <60; otherwise generalist.
-- Static IDs connect game content, translations, and history reconstruction.
-  AI action IDs contain timestamps; AI event IDs contain the turn number.
-- The save stores game state, nullable displayed event, locale, and nullable ending
-  under `fomo-simulator-save`. Numeric stats, history structure, actions, locale,
-  and version are validated. Invalid data is removed; there are no migrations.
-- Current AI responses use `choices` with numeric deltas. A legacy `events` format
-  with English `stat_hints` is also accepted. Both require three distinct action
-  types. Numeric deltas must be finite and are rounded/clamped to −100…100.
-- The detailed opening prompt describes a 20-turn arc independent of the actual
-  turn limit. Subsequent event requests use a generic prompt and the last three
-  history entries; ending requests include the full choice history.
-- AI text is English. Static localization falls back to supplied text for unknown
-  IDs. History reconstructs static actions; AI action types currently fall back
-  to `safe` because history does not store an action type.
-- Stats, action-type colors/badges, and debug turn status are development-only.
-  Pending generation and ending status are visible in production too.
+## Existing game invariants
 
-## Integrations and deployment
+Stats start at 50 and are clamped to 0–100. The default five actions finish at
+turn counter 6. Static ending precedence is curiosity/chaos, chaos, network,
+AI skill with low chaos, then generalist. Static IDs link content, translations,
+and saved history. Schema version remains 1; there are no migrations.
 
-The implementation uses `fetch`, not the declared `@anthropic-ai/sdk` package.
-Requests send the configured model, an API key header, Anthropic API version,
-and the direct-browser-access header to `/v1/messages`. The development proxy
-in `vite.config.ts` rewrites `/api/anthropic` to `https://api.anthropic.com`.
-The proxy forwards a browser-provided credential; it does not hold a server secret.
-
-Production hosting, server-held credentials, request rate limiting, retries,
-analytics, and remote saves are not implemented. See README for environment
-variables and the legacy encoded-target proxy convention. `.env*` files are
-ignored except `.env.example`; never place real keys in tracked files.
+The detailed narrator is used for the opening and describes a 20-turn arc;
+subsequent turns use a shorter prompt and three recent history entries. Endings
+use full bounded choice history. Current `choices` numeric deltas and legacy
+`events` English stat hints remain accepted. AI text stays English. AI history
+types still default to safe because stored history lacks action types. Stats,
+action badges/colors, and debug status remain development-only.
 
 ## Verification
 
-`npm run check` runs application/config/test type checking, ESLint including React
-Hooks rules, Vitest, and a production build. The GitHub Actions workflow runs it
-on Node 24 after `npm ci`. Compiler configuration uses bundler module resolution;
-type checking does not emit Vite configuration JavaScript.
+`npm run check` type-checks all code, lints, runs offline tests, builds React, and
+checks client artifacts. `npm run audit` includes development dependencies. CI
+also builds the image. Tests include engine replay/bounds, storage, React lifecycle,
+same-origin client fallbacks, server HTTP access/limits/validation, generation
+parsing, and HTTP → real SDK → mocked Claude requests. Unexpected global
+fetches fail; Node HTTP tests use ephemeral local ports and fake upstreams.
 
-Tests are colocated with their subjects:
-
-- `src/engine/engine.test.ts`: exact stat effects, bounds, configured completion,
-  ending precedence, configuration validation, deterministic replay.
-- `src/services/storage.test.ts`: ready/pending saves, invalid versions and nested
-  data, malformed JSON, disabled browser storage.
-- `src/services/ai.test.ts`: request payload, parsing, HTTP/network failures,
-  offline mode, malformed endings, cancellation, and timeout fallback.
-- `src/useGame.test.tsx`: Strict Mode, restart during event/ending requests,
-  duplicate submissions, pending-turn refresh, saved ending reuse, unmount.
-- `src/App.test.tsx`: rendered offline play, ending/restart, language preservation,
-  and pending-state interaction.
-
-`src/test/setup.ts` clears storage and stubs network access to fail by default.
-Tests use jsdom rather than a real browser. They do not verify actual Anthropic
-availability, model quality, deployed proxy behavior, browser rendering, or
-cross-tab save coordination. Smoke-test dev and production preview for UI work.
+`npm run test:integration:claude` alone performs a live billable API key check.
+It requires a server-side `ANTHROPIC_API_KEY` and is never part of CI. Automated
+tests do not establish live API key validity, model availability, deployed IAM
+policy, or browser visual behavior. See README and deployment docs for operator checks.

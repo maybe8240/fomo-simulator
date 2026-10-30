@@ -1,4 +1,4 @@
-import type { GameState, PlayerState, WorldState } from './types';
+import type { GameState, PlayerState, WorldState } from './types.ts';
 
 export function createInitialPlayerState(): PlayerState {
   return {

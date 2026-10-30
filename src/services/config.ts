@@ -1,4 +1,4 @@
-import { getAIConfig, isAIEnabled } from './ai';
+
 
 export function parseMaxTurns(value: string | undefined): number {
   const turns = Number(value);
@@ -7,7 +7,7 @@ export function parseMaxTurns(value: string | undefined): number {
 
 export function getGameConfig() {
   return {
-    ai: isAIEnabled() ? getAIConfig() : null,
+    aiEnabled: import.meta.env.VITE_AI_ENABLED === 'true',
     maxTurns: parseMaxTurns(import.meta.env.VITE_TURNS),
   };
 }

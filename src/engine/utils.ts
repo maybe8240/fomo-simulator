@@ -1,5 +1,5 @@
-import { PLAYER_STAT_KEYS, WORLD_STAT_KEYS } from './types';
-import type { PlayerDelta, PlayerState, WorldDelta, WorldState } from './types';
+import { PLAYER_STAT_KEYS, WORLD_STAT_KEYS } from './types.ts';
+import type { PlayerDelta, PlayerState, WorldDelta, WorldState } from './types.ts';
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);

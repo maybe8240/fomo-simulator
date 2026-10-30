@@ -1,0 +1,11 @@
+.git
+.codex
+node_modules
+dist
+coverage
+.env
+.env.*
+*.tsbuildinfo
+**/*.test.ts
+**/*.test.tsx
+integration

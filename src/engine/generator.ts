@@ -1,6 +1,6 @@
-import { STARTER_EVENTS } from './events';
-import { createRng, randomInt } from './rng';
-import type { DisplayedTurn, Event, GameState } from './types';
+import { STARTER_EVENTS } from './events.ts';
+import { createRng, randomInt } from './rng.ts';
+import type { DisplayedTurn, Event, GameState } from './types.ts';
 
 function hashString(value: string): number {
   let hash = 0;

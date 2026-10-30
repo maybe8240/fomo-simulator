@@ -7,7 +7,6 @@ const blockedFetch = vi.fn<typeof fetch>(() => {
 
 function offlineEnvironment() {
   vi.stubEnv('VITE_AI_ENABLED', 'false');
-  vi.stubEnv('VITE_CLAUDE_API_KEY', '');
   vi.stubEnv('VITE_TURNS', '5');
   vi.stubGlobal('fetch', blockedFetch);
 }
@@ -16,13 +15,15 @@ function offlineEnvironment() {
 offlineEnvironment();
 
 beforeEach(() => {
-  localStorage.clear();
+  if (typeof window !== 'undefined') localStorage.clear();
   blockedFetch.mockClear();
   offlineEnvironment();
 });
 
 afterEach(() => {
-  cleanup();
-  localStorage.clear();
+  if (typeof window !== 'undefined') {
+    cleanup();
+    localStorage.clear();
+  }
   expect(blockedFetch).not.toHaveBeenCalled();
 });

@@ -1,8 +1,5 @@
 interface ImportMetaEnv {
   readonly DEV: boolean
-  readonly VITE_CLAUDE_API_KEY?: string
-  readonly VITE_CLAUDE_BASE_URL?: string
-  readonly VITE_CLAUDE_MODEL?: string
   readonly VITE_AI_ENABLED?: string
   readonly VITE_TURNS?: string
 }

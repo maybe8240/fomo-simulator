@@ -1,4 +1,4 @@
-import type { Ending, GameState } from './types';
+import type { Ending, GameState } from './types.ts';
 
 const STATIC_ENDINGS: Ending[] = [
   {
