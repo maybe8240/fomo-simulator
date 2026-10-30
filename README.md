@@ -8,6 +8,9 @@ works without credentials. AI content is English.
 
 ## Local startup
 
+See [AI gameplay workflow](docs/AI_GAMEPLAY_WORKFLOW.md) for the player journey
+from opening event through choices, ending, and downloading a recap.
+
 Use Node 24.x and npm 11.x (`.nvmrc` selects Node 24):
 
 ```sh
@@ -165,3 +168,12 @@ reuse the prefix; cache writes cost extra and hits reduce input processing only.
 See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 Offline tests verify cache directives and streaming behavior; live cache-hit usage
 and latency have not been measured.
+
+## Share a completed run
+
+After the ending is ready, Share Run creates a PNG recap with the localized
+ending, full chronological history (including missed paths), and final player
+and world stats. Clicking Share Run downloads the PNG directly; no native share sheet is opened.
+Image generation happens locally; no image or saved run is uploaded by the app.
+Final stats appear in the exported image even in production, while the in-game
+stats panel remains development-only.

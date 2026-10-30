@@ -55,6 +55,12 @@ h1 {
   gap: 1rem;
 }
 
+.hero-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
 .language-switcher {
   display: inline-flex;
   padding: 0.25rem;
@@ -346,6 +352,10 @@ h1 {
 
 .restart-button:hover {
   background: #1d4ed8;
+}
+
+.restart-button--header {
+  margin-top: 0;
 }
 
 @media (max-width: 640px) {

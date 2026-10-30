@@ -5,6 +5,7 @@ import { useGame } from './useGame';
 import EventCard from './ui/EventCard';
 import HistoryLog from './ui/HistoryLog';
 import StatPanel from './ui/StatPanel';
+import ShareRun from './ui/ShareRun';
 
 function App({ services = defaultGameServices }: { services?: GameServices }) {
   const { gameState, displayedTurn, locale, ending, isGenerating, isGeneratingEnding,
@@ -38,15 +39,18 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
               >
                 {translate(locale, 'chinese')}
               </button>
+
+            </div>
+          </div>
+          <div className="hero-actions">
               <button
-                className="restart-button restart-button--small"
+                className="restart-button restart-button--header"
                 onClick={restart}
                 type="button"
                 title={translate(locale, 'restart_run')}
               >
                 ↻
               </button>
-            </div>
           </div>
         </header>
 
@@ -75,6 +79,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
             </div>
             <p className="ending-title">{localizedEnding.title}</p>
             <p className="status">{localizedEnding.summary}</p>
+            {ending && <ShareRun key={`${gameState.seed}-${locale}`} state={gameState} ending={ending} locale={locale} />}
             <button className="restart-button" onClick={restart} type="button">
               {translate(locale, 'restart_run')}
             </button>

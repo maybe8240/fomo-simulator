@@ -126,3 +126,10 @@ reuse the prefix; cache writes cost extra and hits reduce input processing only.
 See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 Offline tests verify cache directives and streaming behavior; live cache-hit usage
 and latency have not been measured.
+
+Completed-run sharing is owned by `src/ui/ShareRun.tsx` and
+`src/services/share.ts`. A canvas-rendered PNG recap is prepared after the ending
+arrives and downloaded directly when the player clicks Share Run.
+The image includes localized ending/history and all final player/world stats,
+independently of viewport size and development-only panels. The download uses a local blob URL and does not call the Web Share API. No server
+endpoint, new dependency, or save-schema change is required.

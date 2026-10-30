@@ -11,6 +11,11 @@ type LocalizedText = {
 type Dictionary = Record<string, LocalizedText>;
 
 const UI_TEXT: Dictionary = {
+  share_run: { en: 'Share Run', zh: '分享本次人生' },
+  final_stats: { en: 'Final Stats', zh: '最终状态' },
+  preparing_share: { en: 'Preparing your image...', zh: '正在生成分享图片……' },
+  share_error: { en: 'Could not create or share the image. Try again.', zh: '无法生成或分享图片，请重试。' },
+  share_downloaded: { en: 'Image downloaded. You can share it anywhere.', zh: '图片已下载，可以分享给朋友。' },
   app_title: { en: 'FOMO Simulator', zh: 'FOMO 模拟器' },
   app_subtitle: {
     en: 'Life in the AI Era',
