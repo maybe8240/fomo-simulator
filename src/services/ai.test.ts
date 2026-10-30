@@ -8,6 +8,36 @@ const services = (fetcher: typeof fetch, enabled = true) => createGameServices({
 const turn = { currentEvent: STARTER_EVENTS[0], isAIGenerated: true };
 const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
 describe('same-origin generation', () => {
+ it('delivers narrative before the final result across split UTF-8 chunks', async () => {
+  let output!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start(controller) { output = controller; } });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+  const preview = vi.fn();
+  const pending = services(fetcher).generateTurn(state, signal(), preview);
+  const bytes = new TextEncoder().encode(JSON.stringify({ type: 'narrative', text: 'Hello 世界' }) + '\n');
+  for (const byte of bytes) output.enqueue(new Uint8Array([byte]));
+  await vi.waitFor(() => expect(preview).toHaveBeenCalledWith('Hello 世界'));
+  output.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'result', value: turn }) + '\n'));
+  output.close();
+  expect(await pending).toEqual(turn);
+ });
+ it.each(['', '{"type":"error"}\n', '{"type":"result","value":{}}\n'])(
+  'falls back when a stream ends or fails without valid gameplay: %s', async suffix => {
+   const body = JSON.stringify({ type: 'narrative', text: 'Draft' }) + '\n' + suffix;
+   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+   expect((await services(fetcher).generateTurn(state, signal(), vi.fn())).isAIGenerated).toBe(false);
+  });
+ it('cancels a stalled response body even when the injected fetch ignores abort', async () => {
+  const cancelled = vi.fn();
+  const body = new ReadableStream<Uint8Array>({ cancel: cancelled });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+  const controller = new AbortController();
+  const pending = services(fetcher).generateTurn(state, controller.signal, vi.fn());
+  await Promise.resolve();
+  controller.abort();
+  expect((await pending).isAIGenerated).toBe(false);
+  expect(cancelled).toHaveBeenCalled();
+ });
  it('sends only game state to the event endpoint and accepts a validated turn', async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(turn));
   expect(await services(fetcher).generateTurn(state, signal())).toEqual(turn);

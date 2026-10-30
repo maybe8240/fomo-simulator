@@ -63,6 +63,38 @@ afterEach(async () => {
 });
 
 describe('HTTP boundary', () => {
+  it('returns narrative frames and a final result for streaming clients', async () => {
+    generation.event = vi.fn(async (_state, _signal, onNarrative) => {
+      onNarrative?.('A story begins');
+      return turn;
+    });
+    await start();
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.headers['content-type']).toBe('application/x-ndjson');
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line))).toEqual([
+      { type: 'narrative', text: 'A story begins' }, { type: 'result', value: turn },
+    ]);
+  });
+  it('terminates a partially sent stream with a safe error frame', async () => {
+    generation.event = vi.fn(async (_state, _signal, onNarrative) => {
+      onNarrative?.('Draft');
+      throw new Error('private credentials');
+    });
+    await start();
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.text).not.toContain('private');
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error' });
+  });
+  it('keeps the generation deadline after sending streaming headers', async () => {
+    generation.event = vi.fn((_state, _signal, onNarrative) => {
+      onNarrative?.('Draft');
+      return new Promise<DisplayedTurn>(() => {});
+    });
+    await start({ generationTimeoutMs: 20 });
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error' });
+    expect(vi.mocked(generation.event).mock.calls[0][1].aborted).toBe(true);
+  });
   it('serves the React entry, HEAD, and assets with security headers', async () => {
     await start();
     const root = await send('/', undefined, {}, 'GET');
@@ -206,7 +238,8 @@ describe('HTTP → real SDK → mocked Claude integration', () => {
     expect(headers.has('authorization')).toBe(false);
     const request = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(request.model).toBe('claude-haiku-4-5');
-    expect(request.system).toContain('YOUR VOICE');
+    expect(request.system[0].text).toContain('YOUR VOICE');
+    expect(request.system[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(request.max_tokens).toBe(2048);
   });
 });

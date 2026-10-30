@@ -103,3 +103,26 @@ fetches fail; Node HTTP tests use ephemeral local ports and fake upstreams.
 It requires a server-side `ANTHROPIC_API_KEY` and is never part of CI. Automated
 tests do not establish live API key validity, model availability, deployed IAM
 policy, or browser visual behavior. See README and deployment docs for operator checks.
+
+## Streaming and prompt caching
+
+The browser requests newline-delimited JSON from the existing game endpoints.
+Narrative text appears progressively for events and endings; choices appear only
+after the complete response passes validation. Previews are temporary, plain text
+and never saved. Restart/unmount cancels the stream and discards stale previews.
+A failed, interrupted, or invalid stream falls back to static content. Clients
+without the streaming Accept header still receive the original JSON response.
+After streaming headers are sent, failures use a generic error frame instead of
+an HTTP 502. Existing access checks, quotas, and generation deadlines still apply.
+
+Stable system prompt blocks carry Anthropic ephemeral cache directives (default
+five-minute TTL); player stats and history follow outside the cache breakpoint.
+Opening, later-turn, and ending prompts remain separate to preserve their tone.
+Cache hits require an identical prefix and the model-specific minimum token count.
+Haiku 4.5 requires 4,096 tokens: the current short system prompts are below that
+threshold, so this model will process them normally without cache hits. We do not
+pad prompts or change models to force caching. Other eligible models/prompts can
+reuse the prefix; cache writes cost extra and hits reduce input processing only.
+See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+Offline tests verify cache directives and streaming behavior; live cache-hit usage
+and latency have not been measured.

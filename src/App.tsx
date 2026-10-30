@@ -8,7 +8,7 @@ import StatPanel from './ui/StatPanel';
 
 function App({ services = defaultGameServices }: { services?: GameServices }) {
   const { gameState, displayedTurn, locale, ending, isGenerating, isGeneratingEnding,
-    selectAction, setLocale, restart } = useGame(services);
+    selectAction, setLocale, restart, narrative } = useGame(services);
   const currentEvent = displayedTurn?.currentEvent;
   const localizedEnding = ending
     ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary)
@@ -65,7 +65,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
             key={currentEvent.id}
             locale={locale}
             onSelectAction={selectAction}
-          /> : <p role="status">{translate(locale, 'generating_event')}</p>}
+          /> : <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_event')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>}
         </section>
 
         {localizedEnding ? (
@@ -80,7 +80,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
             </button>
           </section>
         ) : isGeneratingEnding ? (
-          <p role="status">{translate(locale, 'generating_ending')}</p>
+          <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_ending')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>
         ) : (
           import.meta.env.DEV && (
             <section className="panel">

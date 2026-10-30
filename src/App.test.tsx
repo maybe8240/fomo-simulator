@@ -35,8 +35,12 @@ describe('game interface', () => {
     expect(screen.getByRole('status').textContent).toBe('Generating new event...');
     expect(document.querySelector('.action-button')).toBeNull();
     await waitFor(() => expect(services.generateTurn).toHaveBeenCalledTimes(1));
+    act(() => vi.mocked(services.generateTurn).mock.calls[0][2]?.('An email arrives...'));
+    expect(screen.getByText('An email arrives...')).toBeDefined();
+    expect(document.querySelector('.action-button')).toBeNull();
     await act(async () => { resolve({ currentEvent: STARTER_EVENTS[0], isAIGenerated: true }); });
     expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('An email arrives...')).toBeNull();
     expect(screen.getByRole('button', { name: /Apply immediately/ })).toBeDefined();
   });
 });

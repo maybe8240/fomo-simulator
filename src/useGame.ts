@@ -4,7 +4,7 @@ import { STARTER_EVENTS } from './engine/events';
 import { generateTurnEvents } from './engine/generator';
 import { resolveAction } from './engine/resolver';
 import { createInitialState } from './engine/state';
-import type { Action, Event } from './engine/types';
+import type { Action, Event, GameState } from './engine/types';
 import type { Locale } from './i18n';
 import type { GameServices } from './services/game';
 import { clearSavedGame, loadSavedGame, saveGame } from './services/storage';
@@ -26,6 +26,7 @@ function freshRun(services: GameServices, locale: Locale = 'en'): Run {
 export function useGame(services: GameServices) {
   const [run, setRun] = useState<Run>(() => loadSavedGame() ?? freshRun(services));
   const { gameState, displayedTurn, ending } = run;
+  const [preview, setPreview] = useState<{ state: GameState; text: string } | null>(null);
 
   useEffect(() => {
     saveGame(run);
@@ -36,13 +37,16 @@ export function useGame(services: GameServices) {
 
     const controller = new AbortController();
     let active = true;
+    const onNarrative = (text: string) => {
+      if (active && !controller.signal.aborted) setPreview({ state: gameState, text });
+    };
     // Deferring lets Strict Mode's initial cleanup cancel before issuing a request.
     void Promise.resolve().then(async () => {
       if (!active) return;
       if (gameState.completed) {
         let result;
         try {
-          result = await services.generateEnding(gameState, controller.signal);
+          result = await services.generateEnding(gameState, controller.signal, onNarrative);
         } catch {
           result = getEnding(gameState);
         }
@@ -51,7 +55,7 @@ export function useGame(services: GameServices) {
       } else {
         let result;
         try {
-          result = await services.generateTurn(gameState, controller.signal);
+          result = await services.generateTurn(gameState, controller.signal, onNarrative);
         } catch {
           result = generateTurnEvents(gameState);
         }
@@ -83,6 +87,7 @@ export function useGame(services: GameServices) {
 
   return {
     ...run,
+    narrative: preview?.state === gameState && (gameState.completed ? ending === null : displayedTurn === null) ? preview.text : '',
     isGenerating: !gameState.completed && displayedTurn === null,
     isGeneratingEnding: gameState.completed && ending === null,
     selectAction,

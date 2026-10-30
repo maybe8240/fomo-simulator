@@ -8,7 +8,7 @@ function clamp(value: number): number {
  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('Invalid delta');
  return Math.min(Math.max(Math.round(value), -100), 100);
 }
-export function buildUncachedSystemPrompt(): string {
+export function buildEventSystemPrompt(): string {
   return `You are a game that simulates life in the AI era (2026). Present a realistic event and generate exactly 3 choices: one safe/conventional, one risky/opportunity, one absurd/playful.
 
 IMPORTANT:

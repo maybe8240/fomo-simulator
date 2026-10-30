@@ -128,16 +128,33 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), config.generationTimeoutMs);
       res.once('close', () => controller.abort());
+      const streaming = req.headers.accept === 'application/x-ndjson';
+      const frame = (data: unknown) => {
+        if (controller.signal.aborted || res.destroyed || res.writableEnded) return;
+        if (!res.headersSent) {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+          res.flushHeaders();
+        }
+        // Disconnect slow consumers instead of accumulating an unbounded output queue.
+        if (!res.write(JSON.stringify(data) + '\n')) controller.abort();
+      };
+      const onNarrative = streaming ? (text: string) => frame({ type: 'narrative', text }) : undefined;
       try {
         const result = await Promise.race([
-          ending ? generation.ending(state, controller.signal) : generation.event(state, controller.signal),
-          new Promise<never>((_done, reject) => controller.signal.addEventListener('abort',
-            () => reject(new Error('Generation cancelled')), { once: true })),
+          ending ? generation.ending(state, controller.signal, onNarrative) : generation.event(state, controller.signal, onNarrative),
+          new Promise<never>((_done, reject) => {
+            const cancelled = () => reject(new Error('Generation cancelled'));
+            if (controller.signal.aborted) cancelled();
+            else controller.signal.addEventListener('abort', cancelled, { once: true });
+          }),
         ]);
-        reply(res, 200, result);
+        if (streaming) { frame({ type: 'result', value: result }); res.end(); }
+        else reply(res, 200, result);
       } catch {
         // Never expose SDK errors, upstream bodies, tokens, or prompt/history data.
-        reply(res, 502, { error: 'Generation unavailable. Please try again later.' });
+        if (res.headersSent) {
+          if (!res.destroyed) res.end(JSON.stringify({ type: 'error' }) + '\n');
+        } else reply(res, 502, { error: 'Generation unavailable. Please try again later.' });
       } finally {
         clearTimeout(timer);
         activeAI--;

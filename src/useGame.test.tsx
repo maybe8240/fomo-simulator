@@ -50,9 +50,16 @@ describe('run lifecycle', () => {
     const { result } = renderHook(() => useGame(service));
     await waitFor(() => expect(service.generateTurn).toHaveBeenCalledTimes(1));
     const oldSignal = vi.mocked(service.generateTurn).mock.calls[0][1];
+    const oldPreview = vi.mocked(service.generateTurn).mock.calls[0][2]!;
+    act(() => oldPreview('Partial story'));
+    expect(result.current.narrative).toBe('Partial story');
+    expect(loadSavedGame()?.displayedTurn).toBeNull();
+    expect(JSON.stringify(loadSavedGame())).not.toContain('Partial story');
     act(() => result.current.restart());
     await waitFor(() => expect(service.generateTurn).toHaveBeenCalledTimes(2));
     expect(oldSignal.aborted).toBe(true);
+    act(() => oldPreview('Stale story'));
+    expect(result.current.narrative).toBe('');
     await act(async () => { fresh.resolve(turn(1)); });
     await act(async () => { old.resolve(turn(2)); });
     expect(result.current.displayedTurn?.currentEvent.id).toBe(STARTER_EVENTS[1].id);
