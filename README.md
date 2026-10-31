@@ -37,6 +37,9 @@ native files. Use `npm.cmd` if PowerShell execution policy blocks `npm.ps1`.
 
 ## Configuration
 
+The three choices appear in random order for each turn. Their order stays stable
+while viewing that turn, including when switching languages.
+
 Browser `.env` configuration (restart/rebuild Vite after changing it):
 
 | Variable | Default | Purpose |
@@ -117,6 +120,9 @@ in this noncompetitive game, but are bounded before entering server prompts.
 | `npm run audit` | Network advisory check for all dependencies; low severity or higher fails |
 | `npm run test:integration:claude` | Explicit live API key smoke test |
 
+The npm override pins minimatch to 11.0.1 for GHSA-g3hv-75wg-m249 in the lint
+dependency tree. Keep it until upstream dependency ranges include a patched release.
+
 CI runs audit and check, then builds the Docker image. Automated tests block
 unexpected network access; backend HTTP tests use a local server and inject
 mocked Claude transports. No credentials are needed for CI. Vite 5's
@@ -180,6 +186,7 @@ and latency have not been measured.
 
 The ending panel appears immediately after the run's final choice, with a loading
 indicator and streaming text while the ending is generated.
+Its Share Run and Restart Run buttons appear together once the ending is ready.
 
 After the ending is ready, Share Run creates a PNG recap with the localized
 ending, full chronological history (including event descriptions and chosen options), and final player

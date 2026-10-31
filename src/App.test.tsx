@@ -33,11 +33,13 @@ describe('game interface', () => {
     expect(panel?.classList.contains('ending-panel')).toBe(true);
     expect(panel?.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(panel?.textContent).toContain('Writing your ending...');
-    expect(screen.getByRole('button', { name: 'Restart Run' }).closest('section')).toBe(panel);
+    expect(screen.queryByRole('button', { name: 'Restart Run' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Share Run' })).toBeNull();
     await waitFor(() => expect(services.generateEnding).toHaveBeenCalledOnce());
     act(() => vi.mocked(services.generateEnding).mock.calls[0][2]?.('You return home with a new plan.'));
     expect(panel?.textContent).toContain('You return home with a new plan.');
+    expect(screen.queryByRole('button', { name: 'Restart Run' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share Run' })).toBeNull();
     await act(async () => { resolve({ id: 'ai_generated', title: 'A new start', summary: 'Your story continues.' }); });
     expect(screen.getByRole('heading', { name: 'Ending' }).closest('section')).toBe(panel);
     expect(panel?.querySelector('[aria-busy="true"]')).toBeNull();
@@ -45,6 +47,7 @@ describe('game interface', () => {
     expect(panel?.textContent).toContain('Your story continues.');
     expect(panel?.textContent).not.toContain('You return home with a new plan.');
     expect(screen.getByRole('button', { name: 'Share Run' }).closest('section')).toBe(panel);
+    expect(screen.getByRole('button', { name: 'Restart Run' }).closest('section')).toBe(panel);
   });
 
   it('shows a timeout notice with fallback choices and clears it on restart', async () => {

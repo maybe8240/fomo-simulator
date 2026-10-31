@@ -7,6 +7,14 @@ credential handling. Plain CSS and English/Chinese dictionaries remain in `src/`
 
 ## Ownership
 
+`package.json` overrides minimatch to 11.0.1 to address GHSA-g3hv-75wg-m249
+throughout the development lint dependency tree. This crosses upstream major
+ranges: the current ESLint CommonJS CLI uses the retained `Minimatch` API and
+typescript-eslint uses the retained named `minimatch` API. `npm run lint` verifies
+the repository's actual configuration. Reassess the override when upstream ranges
+include a patched version; it does not imply compatibility with every upstream
+entry point (older config-array ESM imports expect a default export).
+
 | Path | Responsibility |
 | --- | --- |
 | `index.html` → `src/main.tsx` → `src/App.tsx` | React Strict Mode, UI, controls, endings |
@@ -33,6 +41,11 @@ is never imported into the frontend. Build verification rejects server-only
 integration markers in the browser artifact.
 
 ## End-to-end choice
+
+`EventCard` shuffles choice positions once when mounted for a run/turn/event.
+Renders and language changes keep those positions while using the current event's
+action objects. This display-only order does not mutate events or saved state;
+reloading can reshuffle the choices.
 
 1. `useGame` restores a save or creates a run. Static browser mode shows the first
    starter event; API mode requests an opening event.
@@ -131,8 +144,9 @@ Offline tests verify cache directives and streaming behavior; live cache-hit usa
 and latency have not been measured.
 
 The ending panel appears as soon as the run completes, including while ending
-generation is pending or streaming. It keeps the same heading, styling, and
-restart control throughout; sharing appears once the ending is ready.
+generation is pending or streaming. It keeps the same heading and styling
+throughout; Share Run and the panel's Restart Run button appear together once
+the ending is ready.
 
 Completed-run sharing is owned by `src/ui/ShareRun.tsx` and
 `src/services/share.ts`. A canvas-rendered PNG recap is prepared after the ending

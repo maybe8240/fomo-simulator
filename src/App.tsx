@@ -68,7 +68,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
           {currentEvent ? <EventCard
             disabled={gameState.completed}
             event={currentEvent}
-            key={currentEvent.id}
+            key={`${gameState.seed}-${gameState.world.turn}-${currentEvent.id}`}
             locale={locale}
             onSelectAction={selectAction}
           /> : <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_event')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>}
@@ -85,10 +85,12 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
             </> : isGeneratingEnding && (
               <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_ending')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>
             )}
-            {ending && <ShareRun key={`${gameState.seed}-${locale}`} state={gameState} ending={ending} locale={locale} />}
-            <button className="restart-button" onClick={restart} type="button">
-              {translate(locale, 'restart_run')}
-            </button>
+            {ending && <>
+              <ShareRun key={`${gameState.seed}-${locale}`} state={gameState} ending={ending} locale={locale} />
+              <button className="restart-button" onClick={restart} type="button">
+                {translate(locale, 'restart_run')}
+              </button>
+            </>}
           </section>
         ) : (
           import.meta.env.DEV && (

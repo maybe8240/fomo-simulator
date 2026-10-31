@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Action, Event } from '../engine/types';
 import {
   getLocalizedActionText,
@@ -13,6 +14,15 @@ type EventCardProps = {
 };
 
 function EventCard({ event, disabled, locale, onSelectAction }: EventCardProps) {
+  const [actionOrder] = useState(() => {
+    const order = event.actions.map((_, index) => index);
+    for (let index = order.length - 1; index > 0; index -= 1) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [order[index], order[other]] = [order[other], order[index]];
+    }
+    return order;
+  });
+
   return (
     <article className="panel event-card">
       <div className="event-card__header">
@@ -24,7 +34,7 @@ function EventCard({ event, disabled, locale, onSelectAction }: EventCardProps) 
       </p>
 
       <div className="action-stack">
-        {event.actions.map((action) => (
+        {actionOrder.map(index => event.actions[index]).map((action) => (
           <button
             className="action-button"
             disabled={disabled}
