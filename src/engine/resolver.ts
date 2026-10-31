@@ -1,4 +1,5 @@
 import { applyPlayerDelta, applyWorldDelta } from './utils.ts';
+import { getStatLimits } from './limits.ts';
 import type { Action, DisplayedTurn, Event, GameState, HistoryEntry } from './types.ts';
 
 function getMissedPaths(action: Action, displayedTurn: DisplayedTurn): string[] {
@@ -22,6 +23,11 @@ export function resolveAction(
   const worldAfterDelta = applyWorldDelta(state.world, action.worldDelta);
 
   const historyEntry: HistoryEntry = {
+    actionType: action.type,
+    eventDescription: event.description.slice(0, 6000),
+    actionFlavor: action.flavor.slice(0, 400),
+    missedActions: displayedTurn.currentEvent.actions.filter(candidate => candidate.id !== action.id)
+      .map(candidate => ({ type: candidate.type, label: candidate.label })),
     turn: currentTurn,
     eventId: event.id,
     eventTitle: event.title,
@@ -39,6 +45,7 @@ export function resolveAction(
       turn: currentTurn + 1,
     },
     history: [...state.history, historyEntry],
-    completed: currentTurn >= maxTurns,
+    completed: currentTurn >= (state.maxTurns ?? maxTurns)
+      || getStatLimits({ player, world: worldAfterDelta }).length > 0,
   };
 }

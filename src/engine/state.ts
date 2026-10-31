@@ -19,12 +19,13 @@ export function createInitialWorldState(): WorldState {
   };
 }
 
-export function createInitialState(seed = Date.now()): GameState {
+export function createInitialState(seed = Date.now(), maxTurns?: number): GameState {
   return {
     player: createInitialPlayerState(),
     world: createInitialWorldState(),
     history: [],
     seed,
     completed: false,
+    ...(maxTurns === undefined ? {} : { maxTurns }),
   };
 }

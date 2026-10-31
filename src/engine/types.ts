@@ -52,6 +52,11 @@ export type Event = {
 
 // Structured history keeps future UI and ending logic easier to evolve.
 export type HistoryEntry = {
+  // Optional for version-1 saves made before narrative continuity was recorded.
+  actionType?: ActionType;
+  eventDescription?: string;
+  actionFlavor?: string;
+  missedActions?: { type: ActionType; label: string }[];
   turn: number;
   eventId: string;
   eventTitle: string;
@@ -62,6 +67,7 @@ export type HistoryEntry = {
 };
 
 export type GameState = {
+  maxTurns?: number;
   player: PlayerState;
   world: WorldState;
   history: HistoryEntry[];
@@ -70,6 +76,7 @@ export type GameState = {
 };
 
 export type EndingId =
+  | 'stat_limit'
   | 'quiet_specialist'
   | 'stable_generalist'
   | 'chaotic_innovator'
@@ -78,12 +85,14 @@ export type EndingId =
   | 'ai_generated';
 
 export type Ending = {
+  generatedLocale?: 'en' | 'zh';
   id: EndingId;
   title: string;
   summary: string;
 };
 
 export type DisplayedTurn = {
+  generatedLocale?: 'en' | 'zh';
   currentEvent: Event;
   isAIGenerated?: boolean;
 };

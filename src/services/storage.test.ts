@@ -10,6 +10,11 @@ function saveFixture() {
 }
 
 describe('versioned saves', () => {
+  it.each([{ fr: {} }, { en: null }, { en: { generatedLocale: 'zh' } }, { en: { generatedLocale: 'en', currentEvent: {} } }])(
+    'rejects malformed language caches %j', variants => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, ...saveFixture(), turnVariants: variants }));
+      expect(loadSavedGame()).toBeNull();
+    });
   it('round-trips the displayed event and language', () => {
     const save = saveFixture();
     saveGame(save);

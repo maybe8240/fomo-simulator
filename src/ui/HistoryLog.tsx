@@ -28,12 +28,8 @@ function HistoryLog({ history, locale }: HistoryLogProps) {
                 return (
                   <>
                     <p className="history-entry__meta">{localized.metaText}</p>
-                    <p>{localized.resultText}</p>
-                    <ul className="history-missed-paths">
-                      {localized.missedPathsText.map((missedPath) => (
-                        <li key={missedPath}>{missedPath}</li>
-                      ))}
-                    </ul>
+                    <p>{localized.eventDescription}</p>
+                    <p className="history-entry__choice">{localized.chosenText}</p>
                   </>
                 );
               })()}

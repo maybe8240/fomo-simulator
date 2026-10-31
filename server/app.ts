@@ -5,6 +5,9 @@ import { readFile, realpath } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { isGameState, object } from '../src/engine/validation.ts';
 import type { GenerationService } from './generation.ts';
+import { GenerationError } from './generation.ts';
+import Anthropic from '@anthropic-ai/sdk';
+import { networkCode, transportTimedOut } from './network.ts';
 import type { ServerConfig } from './config.ts';
 
 class HttpError extends Error {
@@ -109,10 +112,12 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
         throw new HttpError(413, 'Request body too large.');
       }
       const body = await readBody(req, config.bodyLimit);
-      if (!object(body) || Object.keys(body).length !== 1 || !isGameState(body.state)) {
+      if (!object(body) || Object.keys(body).some(key => !['state', 'locale'].includes(key))
+        || (body.locale !== undefined && body.locale !== 'en' && body.locale !== 'zh') || !isGameState(body.state)) {
         throw new HttpError(400, 'Invalid game state.');
       }
       const state = body.state;
+      const locale = body.locale === 'zh' ? 'zh' : 'en';
       const ending = path.endsWith('/ending');
       if (ending !== state.completed) throw new HttpError(400, 'Invalid game phase.');
       const currentDay = Math.floor(now() / 86400000);
@@ -126,18 +131,52 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
       dailyAI++;
       lastAI = now();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), config.generationTimeoutMs);
+      const started = Date.now();
+      let deadlineReached = false;
+      const timer = setTimeout(() => { deadlineReached = true; controller.abort(); }, config.generationTimeoutMs);
       res.once('close', () => controller.abort());
+      const streaming = req.headers.accept === 'application/x-ndjson';
+      const frame = (data: unknown) => {
+        if (controller.signal.aborted || res.destroyed || res.writableEnded) return;
+        if (!res.headersSent) {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+          res.flushHeaders();
+        }
+        // Disconnect slow consumers instead of accumulating an unbounded output queue.
+        if (!res.write(JSON.stringify(data) + '\n')) controller.abort();
+      };
+      const onNarrative = streaming ? (text: string) => frame({ type: 'narrative', text }) : undefined;
       try {
         const result = await Promise.race([
-          ending ? generation.ending(state, controller.signal) : generation.event(state, controller.signal),
-          new Promise<never>((_done, reject) => controller.signal.addEventListener('abort',
-            () => reject(new Error('Generation cancelled')), { once: true })),
+          ending ? generation.ending(state, controller.signal, onNarrative, locale) : generation.event(state, controller.signal, onNarrative, locale),
+          new Promise<never>((_done, reject) => {
+            const cancelled = () => reject(new Error('Generation cancelled'));
+            if (controller.signal.aborted) cancelled();
+            else controller.signal.addEventListener('abort', cancelled, { once: true });
+          }),
         ]);
-        reply(res, 200, result);
-      } catch {
+        if (streaming) { frame({ type: 'result', value: result }); res.end(); }
+        else reply(res, 200, result);
+      } catch (error) {
+        const providerTimeout = !controller.signal.aborted
+          && (error instanceof Anthropic.APIConnectionTimeoutError || transportTimedOut(error));
+        const timedOut = deadlineReached || providerTimeout;
         // Never expose SDK errors, upstream bodies, tokens, or prompt/history data.
-        reply(res, 502, { error: 'Generation unavailable. Please try again later.' });
+        console.warn('Generation failed', {
+          reason: deadlineReached ? 'generation_timeout' : providerTimeout ? 'provider_timeout'
+            : controller.signal.aborted ? 'cancelled'
+            : error instanceof GenerationError ? error.reason
+              : error instanceof Anthropic.APIConnectionTimeoutError ? 'provider_timeout'
+              : error instanceof Anthropic.APIConnectionError ? 'provider_connection'
+                : error instanceof Anthropic.APIError ? 'provider_rejected' : 'generation_error',
+          ...(error instanceof Anthropic.APIError && Number.isInteger(error.status) ? { status: error.status } : {}),
+          ...(error instanceof Anthropic.APIConnectionError ? { network: networkCode(error) ?? 'unknown' } : {}),
+          ...(timedOut ? { elapsedMs: Date.now() - started, kind: ending ? 'ending' : 'event' } : {}),
+        });
+        const timeoutCode = timedOut ? { code: 'GENERATION_TIMEOUT' } : {};
+        if (res.headersSent) {
+          if (!res.destroyed) res.end(JSON.stringify({ type: 'error', ...timeoutCode }) + '\n');
+        } else reply(res, 502, { error: 'Generation unavailable. Please try again later.', ...timeoutCode });
       } finally {
         clearTimeout(timer);
         activeAI--;

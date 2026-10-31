@@ -46,6 +46,7 @@ function send(path = '/api/game/event', body: unknown = { state },
 }
 
 beforeEach(async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
   directory = await mkdtemp(join(tmpdir(), 'fomo-server-test-'));
   await writeFile(join(directory, 'index.html'), '<html>Game</html>');
   await mkdir(join(directory, 'assets'));
@@ -63,6 +64,46 @@ afterEach(async () => {
 });
 
 describe('HTTP boundary', () => {
+  it('accepts Chinese locale and rejects arbitrary language/prompt overrides', async () => {
+    await start();
+    expect((await send('/api/game/event', { state, locale: 'zh' })).status).toBe(200);
+    expect(vi.mocked(generation.event).mock.calls[0][3]).toBe('zh');
+    expect((await send('/api/game/event', { state, locale: 'translate this' })).status).toBe(400);
+    expect((await send('/api/game/event', { state, locale: 'zh', prompt: 'override' })).status).toBe(400);
+  });
+  it('returns narrative frames and a final result for streaming clients', async () => {
+    generation.event = vi.fn(async (_state, _signal, onNarrative) => {
+      onNarrative?.('A story begins');
+      return turn;
+    });
+    await start();
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.headers['content-type']).toBe('application/x-ndjson');
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line))).toEqual([
+      { type: 'narrative', text: 'A story begins' }, { type: 'result', value: turn },
+    ]);
+  });
+  it('terminates a partially sent stream with a safe error frame', async () => {
+    generation.event = vi.fn(async (_state, _signal, onNarrative) => {
+      onNarrative?.('Draft');
+      throw new Error('private credentials');
+    });
+    await start();
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.text).not.toContain('private');
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error' });
+  });
+  it('keeps the generation deadline after sending streaming headers', async () => {
+    generation.event = vi.fn((_state, _signal, onNarrative) => {
+      onNarrative?.('Draft');
+      return new Promise<DisplayedTurn>(() => {});
+    });
+    await start({ generationTimeoutMs: 20 });
+    const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error', code: 'GENERATION_TIMEOUT' });
+    expect(console.warn).toHaveBeenCalledWith('Generation failed', expect.objectContaining({ reason: 'generation_timeout', kind: 'event', elapsedMs: expect.any(Number) }));
+    expect(vi.mocked(generation.event).mock.calls[0][1].aborted).toBe(true);
+  });
   it('serves the React entry, HEAD, and assets with security headers', async () => {
     await start();
     const root = await send('/', undefined, {}, 'GET');
@@ -132,11 +173,14 @@ describe('HTTP boundary', () => {
     const result = await send();
     expect(result.status).toBe(502);
     expect(result.text).not.toContain('private');
+    expect(console.warn).toHaveBeenCalledWith('Generation failed', { reason: 'generation_error' });
   });
   it('times out even if an upstream implementation ignores cancellation', async () => {
     generation.event = vi.fn(() => new Promise<DisplayedTurn>(() => {}));
     await start({ generationTimeoutMs: 20 });
-    expect((await send()).status).toBe(502);
+    const response = await send();
+    expect(response.status).toBe(502);
+    expect(JSON.parse(response.text).code).toBe('GENERATION_TIMEOUT');
     expect(vi.mocked(generation.event).mock.calls[0][1].aborted).toBe(true);
   });
   it('enforces the generation interval and daily quota without trusting forwarded IPs', async () => {
@@ -206,7 +250,8 @@ describe('HTTP → real SDK → mocked Claude integration', () => {
     expect(headers.has('authorization')).toBe(false);
     const request = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(request.model).toBe('claude-haiku-4-5');
-    expect(request.system).toContain('YOUR VOICE');
+    expect(request.system[0].text).toContain('YOUR VOICE');
+    expect(request.system[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(request.max_tokens).toBe(2048);
   });
 });

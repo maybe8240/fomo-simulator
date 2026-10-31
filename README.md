@@ -4,9 +4,12 @@ A narrative life game set in the AI era: choose safe, risky, or absurd paths,
 change player/world stats, and receive an ending. React + TypeScript + Vite 8
 provide the UI; a Node 24 server serves the build and generates content through
 Claude using a server-side Anthropic API key. Static English/Chinese content
-works without credentials. AI content is English.
+works without credentials. AI content is generated directly in the selected language.
 
 ## Local startup
+
+See [AI gameplay workflow](docs/AI_GAMEPLAY_WORKFLOW.md) for the player journey
+from opening event through choices, ending, and downloading a recap.
 
 Use Node 24.x and npm 11.x (`.nvmrc` selects Node 24):
 
@@ -34,12 +37,15 @@ native files. Use `npm.cmd` if PowerShell execution policy blocks `npm.ps1`.
 
 ## Configuration
 
+The three choices appear in random order for each turn. Their order stays stable
+while viewing that turn, including when switching languages.
+
 Browser `.env` configuration (restart/rebuild Vite after changing it):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_AI_ENABLED` | `false` | Request content from the application API; fall back to static content on failure |
-| `VITE_TURNS` | `5` | Positive safe integer game length; the API accepts at most 100 history entries |
+| `VITE_TURNS` | `5` | Integer game length from 1 to 100; invalid values use 5; saved runs retain their length |
 
 There is no browser API key, provider URL, or model setting. Remove old
 `VITE_CLAUDE_*` settings. Rotate any old API key previously exposed in a build.
@@ -83,7 +89,7 @@ container probes. This intentionally simple shared login fits a private hobby
 deployment; it is not a per-user account or revocable-session system.
 
 API requests require POST and JSON, an allowed origin when present, no cross-site
-fetch indication, a body under 32 KiB, and valid bounded game state. Clients cannot
+fetch indication, a body under 32 KiB, and valid bounded game state. Clients may select en/zh output language, but cannot
 select prompts, models, credentials, or upstream URLs. Unknown routes and files
 outside the build are not served. Generation failures return a generic 502; the
 browser falls back to static content. Origin checks complement authentication;
@@ -114,6 +120,9 @@ in this noncompetitive game, but are bounded before entering server prompts.
 | `npm run audit` | Network advisory check for all dependencies; low severity or higher fails |
 | `npm run test:integration:claude` | Explicit live API key smoke test |
 
+The npm override pins minimatch to 11.0.1 for GHSA-g3hv-75wg-m249 in the lint
+dependency tree. Keep it until upstream dependency ranges include a patched release.
+
 CI runs audit and check, then builds the Docker image. Automated tests block
 unexpected network access; backend HTTP tests use a local server and inject
 mocked Claude transports. No credentials are needed for CI. Vite 5's
@@ -138,7 +147,84 @@ Stats start at 50 and stay within 0–100. A five-action run finishes with turn
 counter 6. Pending events save as null; refresh requests a replacement event
 without applying the action again. Invalid saves are discarded without migration.
 Static events replay from seed and choice history; AI content is nondeterministic.
-The narrator still describes a 20-turn arc independently of the configured game
-length. Static content supports English/Chinese; AI content remains English.
+Narrative pacing follows the saved run length. Later scenes begin with the
+consequence of the previous choice; endings resolve the final choice. Static content supports English/Chinese; AI content follows the selected language.
 
 See [docs/CODEBASE.md](docs/CODEBASE.md) and [AGENTS.md](AGENTS.md) for development.
+
+## Streaming and prompt caching
+
+Selecting Chinese uses native Chinese prompts for original Chinese stories,
+choices, and endings; there is no English-to-Chinese translation pass. Switching
+language restores its saved current-turn version, or generates that language
+once if absent, without advancing the run. Completed endings are cached too. Previously chosen history keeps its recorded
+language. Restart the frontend/backend after updating to enable this behavior.
+
+The browser requests newline-delimited JSON from the existing game endpoints.
+Narrative text appears progressively for events and endings; choices appear only
+after the complete response passes validation. Previews are temporary, plain text
+and never saved. Restart/unmount cancels the stream and discards stale previews.
+A failed, interrupted, or invalid stream falls back to static content. Clients
+without the streaming Accept header still receive the original JSON response.
+After streaming headers are sent, failures use a generic error frame instead of
+an HTTP 502. Existing access checks, quotas, and generation deadlines still apply.
+
+Stable system prompt blocks carry Anthropic ephemeral cache directives (default
+five-minute TTL); player stats and history follow outside the cache breakpoint.
+Opening and later turns share one stable event policy; endings reuse the same
+voice and continuity policy with a separate ending instruction.
+Cache hits require an identical prefix and the model-specific minimum token count.
+Haiku 4.5 requires 4,096 tokens: the current short system prompts are below that
+threshold, so this model will process them normally without cache hits. We do not
+pad prompts or change models to force caching. Other eligible models/prompts can
+reuse the prefix; cache writes cost extra and hits reduce input processing only.
+See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+Offline tests verify cache directives and streaming behavior; live cache-hit usage
+and latency have not been measured.
+
+## Share a completed run
+
+The ending panel appears immediately after the run's final choice, with a loading
+indicator and streaming text while the ending is generated.
+Its Share Run and Restart Run buttons appear together once the ending is ready.
+
+After the ending is ready, Share Run creates a PNG recap with the localized
+ending, full chronological history (including event descriptions and chosen options), and final player
+and world stats. Clicking Share Run downloads the PNG directly; no native share sheet is opened.
+Each history turn describes your choice as “You chose to ….” (or “你选择了…。” in Chinese),
+both in the history log and the downloaded recap.
+Image generation happens locally; no image or saved run is uploaded by the app.
+Final stats appear in the exported image even in production, while the in-game
+stats panel remains development-only.
+
+If generation returns 502, inspect the backend terminal for a safe failure category
+(such as `output_limit`, `provider_rejected`, or `provider_connection`). Haiku 5.5
+game requests disable adaptive thinking and reserve 2,048 output tokens per event
+and 1,024 per ending to avoid truncated JSON. Restart the backend after updates.
+
+Connection failures now include an allowlisted `network` code in backend logs;
+provider timeouts use `provider_timeout`. Transient connection errors get one
+retry before response headers arrive, within the same 30-second transport
+deadline. Certificate errors, permanent DNS failures, HTTP errors and interrupted
+response streams are not retried. Persistent network errors still use static
+fallback; the safe code helps distinguish DNS, TLS, routing and socket failures.
+
+## Status-limit completion
+
+After each action, the game clamps and checks all six player stats plus world
+AI hype and economy. Any value at 0 or 100 completes the run immediately, even
+when planned choices remain; the turn counter itself is excluded. The triggering
+action is recorded and the counter increments once before ending generation.
+Simultaneous limits are all supplied to the ending prompt as the central cause,
+in both English and Chinese. Static fallback endings identify each limiting stat
+and value, including in exported images. High values are not automatically wins.
+
+Version-1 saves remain readable. Early completion is valid before maxTurns only
+when a stat is at a boundary. Old unfinished saves already at a boundary after a
+recorded choice now resume at the ending, retaining that choice and clearing any
+old ending. Existing completed saves keep their saved ending. No extra choice is
+applied on refresh. Ordinary runs still finish at their configured turn limit.
+
+When generation times out, the backend logs a safe timeout category with elapsed
+time and request kind. The page shows an English/Chinese timeout notice while
+providing built-in content. Cancelling or restarting does not trigger that notice.

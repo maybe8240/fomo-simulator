@@ -1,4 +1,5 @@
 import type { Ending, GameState } from './types.ts';
+import { getStatLimits } from './limits.ts';
 
 const STATIC_ENDINGS: Ending[] = [
   {
@@ -29,6 +30,11 @@ const STATIC_ENDINGS: Ending[] = [
 ];
 
 export function getEnding(state: GameState): Ending {
+  const limits = getStatLimits(state);
+  if (limits.length) return {
+    id: 'stat_limit', title: 'A Limit Reached',
+    summary: `Your run ended when ${limits.map(limit => `${limit.key} reached ${limit.value}`).join(', ')}. The system has filed this under completed.`,
+  };
   const {
     skill_ai: skillAi,
     network,

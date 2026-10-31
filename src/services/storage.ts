@@ -1,6 +1,7 @@
 import type { Locale } from '../i18n';
 import type { DisplayedTurn, Ending, GameState } from '../engine/types';
 import { PLAYER_STAT_KEYS, WORLD_STAT_KEYS } from '../engine/types';
+import { validHistoryContext, validRunLength, validGeneratedLocale } from '../engine/validation';
 
 export const STORAGE_KEY = 'fomo-simulator-save';
 const STORAGE_VERSION = 1;
@@ -11,6 +12,8 @@ export type PersistedGame = {
   displayedTurn: DisplayedTurn | null;
   locale: Locale;
   ending: Ending | null;
+  turnVariants?: Partial<Record<Locale, DisplayedTurn>>;
+  endingVariants?: Partial<Record<Locale, Ending>>;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -27,7 +30,7 @@ function isValidGameState(value: unknown): value is GameState {
   }
 
   return (
-    isValidStats(value.player, PLAYER_STAT_KEYS) &&
+    validRunLength(value) && isValidStats(value.player, PLAYER_STAT_KEYS) &&
     isValidStats(value.world, WORLD_STAT_KEYS) &&
     Number.isSafeInteger(value.world.turn) && Number(value.world.turn) >= 1 &&
     Array.isArray(value.history) && value.history.every(isValidHistoryEntry) &&
@@ -45,7 +48,7 @@ function isValidStats(value: unknown, keys: readonly string[]): value is Record<
 }
 
 function isValidHistoryEntry(value: unknown): value is GameState['history'][number] {
-  return isObject(value) && Number.isSafeInteger(value.turn)
+  return isObject(value) && validHistoryContext(value) && Number.isSafeInteger(value.turn)
     && ['eventId', 'eventTitle', 'actionId', 'actionLabel', 'resultText']
       .every((key) => typeof value[key] === 'string')
     && Array.isArray(value.missedPathsText)
@@ -62,7 +65,7 @@ function isValidDisplayedTurn(value: unknown): value is DisplayedTurn | null {
     return true;
   }
 
-  if (!isObject(value) || !isObject(value.currentEvent)) return false;
+  if (!isObject(value) || !validGeneratedLocale(value) || !isObject(value.currentEvent)) return false;
   const event = value.currentEvent;
   return (value.isAIGenerated === undefined || typeof value.isAIGenerated === 'boolean')
     && ['id', 'title', 'description'].every((key) => typeof event[key] === 'string')
@@ -81,8 +84,8 @@ function isValidEnding(value: unknown): value is Ending | null {
     return true;
   }
 
-  return isObject(value)
-    && ['quiet_specialist', 'stable_generalist', 'chaotic_innovator', 'connected_builder',
+  return isObject(value) && validGeneratedLocale(value)
+    && ['stat_limit', 'quiet_specialist', 'stable_generalist', 'chaotic_innovator', 'connected_builder',
       'delightfully_strange_person', 'ai_generated'].includes(String(value.id))
     && typeof value.title === 'string' && typeof value.summary === 'string';
 }
@@ -98,7 +101,14 @@ function isValidPersistedGame(value: unknown): value is PersistedGame {
     isValidDisplayedTurn(value.displayedTurn) &&
     isValidLocale(value.locale) &&
     isValidEnding(value.ending)
+    && validVariants(value.turnVariants, isValidDisplayedTurn)
+    && validVariants(value.endingVariants, isValidEnding)
   );
+}
+
+function validVariants(value: unknown, validate: (item: unknown) => boolean): boolean {
+  return value === undefined || (isObject(value) && Object.entries(value).every(([key, item]) =>
+    isValidLocale(key) && isObject(item) && item.generatedLocale === key && validate(item)));
 }
 
 export function loadSavedGame(): PersistedGame | null {
