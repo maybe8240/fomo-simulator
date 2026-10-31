@@ -1,9 +1,10 @@
+import type { Locale } from '../i18n';
 import type { GameState } from '../engine/types';
 
 // This transport only talks to the same-origin application server. No provider credentials.
 export async function requestGameGeneration(
   kind: 'event' | 'ending', state: GameState, signal: AbortSignal, fetcher: typeof fetch = fetch,
-  onNarrative?: (text: string) => void,
+  onNarrative?: (text: string) => void, locale: Locale = 'en',
 ): Promise<unknown> {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -13,7 +14,7 @@ export async function requestGameGeneration(
   try {
     const response = await fetcher('/api/game/' + kind, {
       method: 'POST', credentials: 'same-origin', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(onNarrative ? { Accept: 'application/x-ndjson' } : {}) }, body: JSON.stringify({ state }),
+      headers: { 'Content-Type': 'application/json', ...(onNarrative ? { Accept: 'application/x-ndjson' } : {}) }, body: JSON.stringify({ state, locale }),
     });
     if (!response.ok) throw new Error('Generation unavailable');
     if (response.headers.get('content-type')?.includes('application/x-ndjson')) {

@@ -5,6 +5,9 @@ import { readFile, realpath } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { isGameState, object } from '../src/engine/validation.ts';
 import type { GenerationService } from './generation.ts';
+import { GenerationError } from './generation.ts';
+import Anthropic from '@anthropic-ai/sdk';
+import { networkCode } from './network.ts';
 import type { ServerConfig } from './config.ts';
 
 class HttpError extends Error {
@@ -109,10 +112,12 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
         throw new HttpError(413, 'Request body too large.');
       }
       const body = await readBody(req, config.bodyLimit);
-      if (!object(body) || Object.keys(body).length !== 1 || !isGameState(body.state)) {
+      if (!object(body) || Object.keys(body).some(key => !['state', 'locale'].includes(key))
+        || (body.locale !== undefined && body.locale !== 'en' && body.locale !== 'zh') || !isGameState(body.state)) {
         throw new HttpError(400, 'Invalid game state.');
       }
       const state = body.state;
+      const locale = body.locale === 'zh' ? 'zh' : 'en';
       const ending = path.endsWith('/ending');
       if (ending !== state.completed) throw new HttpError(400, 'Invalid game phase.');
       const currentDay = Math.floor(now() / 86400000);
@@ -141,7 +146,7 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
       const onNarrative = streaming ? (text: string) => frame({ type: 'narrative', text }) : undefined;
       try {
         const result = await Promise.race([
-          ending ? generation.ending(state, controller.signal, onNarrative) : generation.event(state, controller.signal, onNarrative),
+          ending ? generation.ending(state, controller.signal, onNarrative, locale) : generation.event(state, controller.signal, onNarrative, locale),
           new Promise<never>((_done, reject) => {
             const cancelled = () => reject(new Error('Generation cancelled'));
             if (controller.signal.aborted) cancelled();
@@ -150,8 +155,17 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
         ]);
         if (streaming) { frame({ type: 'result', value: result }); res.end(); }
         else reply(res, 200, result);
-      } catch {
+      } catch (error) {
         // Never expose SDK errors, upstream bodies, tokens, or prompt/history data.
+        console.warn('Generation failed', {
+          reason: controller.signal.aborted ? 'cancelled_or_timeout'
+            : error instanceof GenerationError ? error.reason
+              : error instanceof Anthropic.APIConnectionTimeoutError ? 'provider_timeout'
+              : error instanceof Anthropic.APIConnectionError ? 'provider_connection'
+                : error instanceof Anthropic.APIError ? 'provider_rejected' : 'generation_error',
+          ...(error instanceof Anthropic.APIError && Number.isInteger(error.status) ? { status: error.status } : {}),
+          ...(error instanceof Anthropic.APIConnectionError ? { network: networkCode(error) ?? 'unknown' } : {}),
+        });
         if (res.headersSent) {
           if (!res.destroyed) res.end(JSON.stringify({ type: 'error' }) + '\n');
         } else reply(res, 502, { error: 'Generation unavailable. Please try again later.' });

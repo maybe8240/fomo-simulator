@@ -58,7 +58,7 @@ describe('static game rules', () => {
     expect(getEnding({ ...state, player: { ...state.player, ...player } }).id).toBe(id);
   });
 
-  it.each(['', '0', '-1', '1.5', 'Infinity', 'nope', undefined])(
+  it.each(['', '0', '-1', '1.5', '101', 'Infinity', 'nope', undefined])(
     'uses five turns for invalid configuration %s', (value) => {
       expect(parseMaxTurns(value)).toBe(5);
     });

@@ -28,9 +28,8 @@ stats are money, AI skill, network, energy, curiosity, and chaos. World stats ar
 AI hype and the economy. All these values stay between 0 and 100.
 
 With AI requests enabled, a loading message and spinner appear while the opening
-is generated. The opening uses a detailed narrator prompt intended to produce a
-personal, grounded situation with a dry, witty voice. Later events use a shorter
-prompt. There is no prescribed winning path.
+is generated. Opening and later events share a dry, grounded, satirical narrator policy.
+The opening establishes an ordinary pressure and a commitment worth remembering. There is no prescribed winning path.
 
 ## 2. Read while choices are prepared
 
@@ -47,8 +46,9 @@ contains a title, description, and exactly three choices:
 | Risky | An opportunity with real upside and downside |
 | Absurd | A strange or playful alternative |
 
-These categories do not guarantee success or failure. The English/Chinese toggle
-localizes the interface and built-in content; AI-generated prose stays in English.
+These categories do not guarantee success or failure. The English/Chinese toggle selects the language for the interface and generation.
+Chinese mode uses native Chinese prompts for original Chinese scenes, choices,
+and endings, with no English-to-Chinese translation pass.
 
 ## 3. Make a choice
 
@@ -67,8 +67,11 @@ during production play. Final stats still appear in the downloadable recap.
 ## 4. Continue the story
 
 Unless the action completed the run, the old playable event is cleared and the
-next request begins. Claude receives the updated player/world stats and the last
-three history entries, including event titles and selected action labels.
+next request begins. Claude receives updated player/world stats, the saved run length, and the full
+bounded history of event titles, selected actions/types, scene excerpts, and
+selected-action details. Later descriptions open with the consequence of the last
+choice, then build the next dilemma from it. These are prompt instructions, not
+a guarantee that every generated story will meet the quality bar.
 
 Future branches are not pre-generated. Each new event is requested after the
 player acts. Streaming lets the player start reading earlier, but the response
@@ -87,11 +90,12 @@ event stays visible with disabled choices while an ending loading message and
 spinner appear. Ending prose can also stream progressively.
 
 The ending request uses final player/world stats and the full choice history.
-Claude writes a short title and summary reflecting the journey. The validated
+Claude is instructed to resolve the final action through a concrete scene,
+showing both gain and cost with an earlier callback rather than a stat recap. The validated
 ending is displayed and saved, so refreshing does not rewrite it.
 
-Run length is configurable. The narrator's internal 20-turn world arc does not
-override the default five-choice rule. After five choices the internal turn
+Run length is configurable from 1 to 100 and is retained in a saved run. Narrative
+pacing follows that length, moving toward a final compromise. After five choices the internal turn
 counter is 6, while history contains five turns.
 
 ## 6. Download the completed run
@@ -104,7 +108,8 @@ upload. The image contains:
 - All six final player stats and both final world stats.
 - The full chronological history, including choices and missed paths.
 
-Built-in text uses the selected language; generated AI text remains English.
+Built-in text and newly generated AI text use the selected language. Earlier
+chosen history retains its original language.
 The image includes the full run, independently of the visible browser viewport.
 The player can send the downloaded file through any app they choose.
 

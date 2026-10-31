@@ -30,6 +30,61 @@ function services(): GameServices {
 }
 
 describe('run lifecycle', () => {
+  it('generates a fresh Chinese ending after switching a completed run', async () => {
+    const service = services();
+    service.maxTurns = 1;
+    const { result } = renderHook(() => useGame(service));
+    await waitFor(() => expect(result.current.displayedTurn).not.toBeNull());
+    choose(result);
+    await waitFor(() => expect(result.current.ending?.generatedLocale).toBe('en'));
+    act(() => result.current.setLocale('zh'));
+    await waitFor(() => expect(result.current.ending?.generatedLocale).toBe('zh'));
+    expect(vi.mocked(service.generateEnding).mock.calls[1][3]).toBe('zh');
+    expect(result.current.gameState.history).toHaveLength(1);
+  });
+  it('regenerates unplayed AI events in Chinese without applying actions or accepting stale English', async () => {
+    const old = deferred<DisplayedTurn>();
+    const chinese = deferred<DisplayedTurn>();
+    const service = services();
+    service.generateTurn = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(chinese.promise);
+    const { result } = renderHook(() => useGame(service));
+    await waitFor(() => expect(service.generateTurn).toHaveBeenCalledTimes(1));
+    const oldSignal = vi.mocked(service.generateTurn).mock.calls[0][1];
+    act(() => result.current.setLocale('zh'));
+    await waitFor(() => expect(service.generateTurn).toHaveBeenCalledTimes(2));
+    expect(oldSignal.aborted).toBe(true);
+    expect(vi.mocked(service.generateTurn).mock.calls[1][3]).toBe('zh');
+    await act(async () => old.resolve({ ...turn(), isAIGenerated: true }));
+    expect(result.current.displayedTurn).toBeNull();
+    await act(async () => chinese.resolve({ ...turn(1), isAIGenerated: true }));
+    expect(result.current.displayedTurn?.generatedLocale).toBe('zh');
+    expect(result.current.gameState.history).toHaveLength(0);
+    expect(loadSavedGame()?.displayedTurn?.generatedLocale).toBe('zh');
+  });
+  it('replaces an already displayed AI event after a language change', async () => {
+    const service = services();
+    service.generateTurn = vi.fn().mockResolvedValue({ ...turn(), isAIGenerated: true });
+    const { result } = renderHook(() => useGame(service));
+    await waitFor(() => expect(result.current.displayedTurn?.generatedLocale).toBe('en'));
+    act(() => result.current.setLocale('zh'));
+    await waitFor(() => expect(result.current.displayedTurn?.generatedLocale).toBe('zh'));
+    expect(service.generateTurn).toHaveBeenCalledTimes(2);
+    expect(result.current.gameState.world.turn).toBe(1);
+  });
+  it('keeps a saved run length when the current configuration changes', async () => {
+    const firstService = services();
+    firstService.maxTurns = 1;
+    const first = renderHook(() => useGame(firstService));
+    await waitFor(() => expect(first.result.current.displayedTurn).not.toBeNull());
+    first.unmount();
+    const changed = services();
+    changed.maxTurns = 5;
+    const resumed = renderHook(() => useGame(changed));
+    choose(resumed.result);
+    await waitFor(() => expect(resumed.result.current.ending).not.toBeNull());
+    expect(resumed.result.current.gameState.history).toHaveLength(1);
+    expect(resumed.result.current.gameState.maxTurns).toBe(1);
+  });
   it('starts one request in Strict Mode and one per restart, retaining language', async () => {
     const service = services();
     const { result } = renderHook(() => useGame(service), { wrapper: StrictMode });

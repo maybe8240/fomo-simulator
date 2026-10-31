@@ -56,7 +56,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
 
         {import.meta.env.DEV && <StatPanel gameState={gameState} locale={locale} />}
 
-        <section className="section-block">
+        {(!gameState.completed || !displayedTurn?.isAIGenerated || displayedTurn.generatedLocale === locale) && <section className="section-block">
           <div className="panel-heading">
             <h2>{translate(locale, 'current_event')}</h2>
             {import.meta.env.DEV && displayedTurn?.isAIGenerated && (
@@ -70,7 +70,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
             locale={locale}
             onSelectAction={selectAction}
           /> : <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_event')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>}
-        </section>
+        </section>}
 
         {localizedEnding ? (
           <section className="panel ending-panel">

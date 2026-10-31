@@ -8,6 +8,12 @@ const services = (fetcher: typeof fetch, enabled = true) => createGameServices({
 const turn = { currentEvent: STARTER_EVENTS[0], isAIGenerated: true };
 const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
 describe('same-origin generation', () => {
+ it('passes Chinese as a bounded locale setting for events and endings', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(turn));
+  await services(fetcher).generateTurn(state, signal(), undefined, 'zh');
+  await services(fetcher).generateEnding(state, signal(), undefined, 'zh');
+  expect(fetcher.mock.calls.map(([,init]) => JSON.parse(String(init?.body)).locale)).toEqual(['zh','zh']);
+ });
  it('delivers narrative before the final result across split UTF-8 chunks', async () => {
   let output!: ReadableStreamDefaultController<Uint8Array>;
   const body = new ReadableStream<Uint8Array>({ start(controller) { output = controller; } });
@@ -38,13 +44,13 @@ describe('same-origin generation', () => {
   expect((await pending).isAIGenerated).toBe(false);
   expect(cancelled).toHaveBeenCalled();
  });
- it('sends only game state to the event endpoint and accepts a validated turn', async () => {
+ it('sends game state and locale to the event endpoint and accepts a validated turn', async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(turn));
   expect(await services(fetcher).generateTurn(state, signal())).toEqual(turn);
   const [url, init] = fetcher.mock.calls[0];
   expect(url).toBe('/api/game/event');
   expect(init?.credentials).toBe('same-origin');
-  expect(JSON.parse(String(init?.body))).toEqual({state});
+  expect(JSON.parse(String(init?.body))).toEqual({state,locale:'en'});
   expect(new Headers(init?.headers).has('x-api-key')).toBe(false);
   expect(new Headers(init?.headers).has('authorization')).toBe(false);
  });

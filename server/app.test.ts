@@ -46,6 +46,7 @@ function send(path = '/api/game/event', body: unknown = { state },
 }
 
 beforeEach(async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
   directory = await mkdtemp(join(tmpdir(), 'fomo-server-test-'));
   await writeFile(join(directory, 'index.html'), '<html>Game</html>');
   await mkdir(join(directory, 'assets'));
@@ -63,6 +64,13 @@ afterEach(async () => {
 });
 
 describe('HTTP boundary', () => {
+  it('accepts Chinese locale and rejects arbitrary language/prompt overrides', async () => {
+    await start();
+    expect((await send('/api/game/event', { state, locale: 'zh' })).status).toBe(200);
+    expect(vi.mocked(generation.event).mock.calls[0][3]).toBe('zh');
+    expect((await send('/api/game/event', { state, locale: 'translate this' })).status).toBe(400);
+    expect((await send('/api/game/event', { state, locale: 'zh', prompt: 'override' })).status).toBe(400);
+  });
   it('returns narrative frames and a final result for streaming clients', async () => {
     generation.event = vi.fn(async (_state, _signal, onNarrative) => {
       onNarrative?.('A story begins');
@@ -164,6 +172,7 @@ describe('HTTP boundary', () => {
     const result = await send();
     expect(result.status).toBe(502);
     expect(result.text).not.toContain('private');
+    expect(console.warn).toHaveBeenCalledWith('Generation failed', { reason: 'generation_error' });
   });
   it('times out even if an upstream implementation ignores cancellation', async () => {
     generation.event = vi.fn(() => new Promise<DisplayedTurn>(() => {}));

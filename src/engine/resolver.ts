@@ -22,6 +22,9 @@ export function resolveAction(
   const worldAfterDelta = applyWorldDelta(state.world, action.worldDelta);
 
   const historyEntry: HistoryEntry = {
+    actionType: action.type,
+    eventDescription: event.description.slice(0, 1600),
+    actionFlavor: action.flavor.slice(0, 400),
     turn: currentTurn,
     eventId: event.id,
     eventTitle: event.title,
@@ -39,6 +42,6 @@ export function resolveAction(
       turn: currentTurn + 1,
     },
     history: [...state.history, historyEntry],
-    completed: currentTurn >= maxTurns,
+    completed: currentTurn >= (state.maxTurns ?? maxTurns),
   };
 }

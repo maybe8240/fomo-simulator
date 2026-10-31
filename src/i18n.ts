@@ -512,12 +512,12 @@ export function getLocalizedHistoryEntry(
   const actionLabel = action
     ? getLocalizedActionText(locale, action.id, 'label', entry.actionLabel)
     : entry.actionLabel;
-  const actionType = action?.type ?? 'safe';
+  const actionType = entry.actionType ?? action?.type;
 
   const resultText =
     locale === 'zh'
-      ? `你在“${eventTitle}”中选择了${getLocalizedActionType(locale, actionType)}选项“${actionLabel}”。`
-      : `You chose the ${getLocalizedActionType(locale, actionType).toLowerCase()} option "${actionLabel}" from "${eventTitle}".`;
+      ? `你在“${eventTitle}”中选择了${actionType ? getLocalizedActionType(locale, actionType) : ''}选项“${actionLabel}”。`
+      : `You chose the ${actionType ? getLocalizedActionType(locale, actionType).toLowerCase() + ' ' : ''}option "${actionLabel}" from "${eventTitle}".`;
 
   const missedPathsText =
     event?.actions

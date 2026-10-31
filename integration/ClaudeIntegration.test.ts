@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ClaudeIntegration } from './ClaudeIntegration';
 import { createClaudeClient } from '../server/claude';
+import { networkCode } from '../server/network';
 
 const environment = { ANTHROPIC_API_KEY: 'test-api-key' };
 function response(body: unknown, status = 200) {
@@ -19,6 +20,43 @@ function transport() {
 }
 
 describe('Claude API key integration (mocked transport)', () => {
+  it('extracts only allowlisted network codes, including aggregate connection errors', () => {
+    const privateError = Object.assign(new Error('private credentials'), { code: 'PRIVATE_SECRET' });
+    expect(networkCode(privateError)).toBeUndefined();
+    expect(networkCode(new Error('wrapper', { cause: new AggregateError([
+      privateError, Object.assign(new Error('private IP'), { code: 'ENETUNREACH' }),
+    ]) }))).toBe('ENETUNREACH');
+  });
+  it('recovers from one transient socket failure within the same deadline', async () => {
+    const fetcher = transport();
+    const success = await fetcher('https://api.anthropic.com/v1/messages');
+    fetcher.mockReset().mockRejectedValueOnce(new TypeError('private details', {
+      cause: Object.assign(new Error('private transport message'), { code: 'ECONNRESET' }),
+    })).mockResolvedValueOnce(success);
+    expect(await new ClaudeIntegration(environment, fetcher).run()).toEqual(['Hello from the mock.']);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1]?.signal).toBe(fetcher.mock.calls[1][1]?.signal);
+    expect(fetcher.mock.calls[1][1]?.redirect).toBe('error');
+  });
+  it.each(['ECONNRESET', 'CERT_HAS_EXPIRED'])(
+    'bounds retries for %s and suppresses private transport errors', async code => {
+      const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('private detail', {
+        cause: Object.assign(new Error(), { code }),
+      }));
+      await expect(new ClaudeIntegration(environment, fetcher).run()).rejects.toThrow('Claude Messages request failed.');
+      expect(fetcher).toHaveBeenCalledTimes(code === 'ECONNRESET' ? 2 : 1);
+    });
+  it('does not retry cancelled transient failures', async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => {
+      controller.abort();
+      throw Object.assign(new Error('private'), { code: 'ECONNRESET' });
+    });
+    await expect(createClaudeClient(environment, fetcher).messages.create({
+      model: 'claude-haiku-4-5', max_tokens: 1, messages: [{ role: 'user', content: 'Test' }],
+    }, { signal: controller.signal })).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('sends one API-key-authenticated message using the real SDK and fixed destination', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'ignored-test-key');
     vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ignored-test-auth-token');

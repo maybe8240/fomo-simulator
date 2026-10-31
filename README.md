@@ -4,7 +4,7 @@ A narrative life game set in the AI era: choose safe, risky, or absurd paths,
 change player/world stats, and receive an ending. React + TypeScript + Vite 8
 provide the UI; a Node 24 server serves the build and generates content through
 Claude using a server-side Anthropic API key. Static English/Chinese content
-works without credentials. AI content is English.
+works without credentials. AI content is generated directly in the selected language.
 
 ## Local startup
 
@@ -42,7 +42,7 @@ Browser `.env` configuration (restart/rebuild Vite after changing it):
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_AI_ENABLED` | `false` | Request content from the application API; fall back to static content on failure |
-| `VITE_TURNS` | `5` | Positive safe integer game length; the API accepts at most 100 history entries |
+| `VITE_TURNS` | `5` | Integer game length from 1 to 100; invalid values use 5; saved runs retain their length |
 
 There is no browser API key, provider URL, or model setting. Remove old
 `VITE_CLAUDE_*` settings. Rotate any old API key previously exposed in a build.
@@ -86,7 +86,7 @@ container probes. This intentionally simple shared login fits a private hobby
 deployment; it is not a per-user account or revocable-session system.
 
 API requests require POST and JSON, an allowed origin when present, no cross-site
-fetch indication, a body under 32 KiB, and valid bounded game state. Clients cannot
+fetch indication, a body under 32 KiB, and valid bounded game state. Clients may select en/zh output language, but cannot
 select prompts, models, credentials, or upstream URLs. Unknown routes and files
 outside the build are not served. Generation failures return a generic 502; the
 browser falls back to static content. Origin checks complement authentication;
@@ -141,12 +141,18 @@ Stats start at 50 and stay within 0–100. A five-action run finishes with turn
 counter 6. Pending events save as null; refresh requests a replacement event
 without applying the action again. Invalid saves are discarded without migration.
 Static events replay from seed and choice history; AI content is nondeterministic.
-The narrator still describes a 20-turn arc independently of the configured game
-length. Static content supports English/Chinese; AI content remains English.
+Narrative pacing follows the saved run length. Later scenes begin with the
+consequence of the previous choice; endings resolve the final choice. Static content supports English/Chinese; AI content follows the selected language.
 
 See [docs/CODEBASE.md](docs/CODEBASE.md) and [AGENTS.md](AGENTS.md) for development.
 
 ## Streaming and prompt caching
+
+Selecting Chinese uses native Chinese prompts for original Chinese stories,
+choices, and endings; there is no English-to-Chinese translation pass. Switching
+language cancels pending generation and regenerates an unplayed AI event or AI
+ending without advancing the run. Previously chosen history keeps its recorded
+language. Restart the frontend/backend after updating to enable this behavior.
 
 The browser requests newline-delimited JSON from the existing game endpoints.
 Narrative text appears progressively for events and endings; choices appear only
@@ -159,7 +165,8 @@ an HTTP 502. Existing access checks, quotas, and generation deadlines still appl
 
 Stable system prompt blocks carry Anthropic ephemeral cache directives (default
 five-minute TTL); player stats and history follow outside the cache breakpoint.
-Opening, later-turn, and ending prompts remain separate to preserve their tone.
+Opening and later turns share one stable event policy; endings reuse the same
+voice and continuity policy with a separate ending instruction.
 Cache hits require an identical prefix and the model-specific minimum token count.
 Haiku 4.5 requires 4,096 tokens: the current short system prompts are below that
 threshold, so this model will process them normally without cache hits. We do not
@@ -177,3 +184,15 @@ and world stats. Clicking Share Run downloads the PNG directly; no native share 
 Image generation happens locally; no image or saved run is uploaded by the app.
 Final stats appear in the exported image even in production, while the in-game
 stats panel remains development-only.
+
+If generation returns 502, inspect the backend terminal for a safe failure category
+(such as `output_limit`, `provider_rejected`, or `provider_connection`). Haiku 5.5
+game requests disable adaptive thinking and reserve 2,048 output tokens per event
+and 512 per ending to avoid truncated JSON. Restart the backend after updates.
+
+Connection failures now include an allowlisted `network` code in backend logs;
+provider timeouts use `provider_timeout`. Transient connection errors get one
+retry before response headers arrive, within the same 30-second transport
+deadline. Certificate errors, permanent DNS failures, HTTP errors and interrupted
+response streams are not retried. Persistent network errors still use static
+fallback; the safe code helps distinguish DNS, TLS, routing and socket failures.

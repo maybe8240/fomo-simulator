@@ -14,7 +14,7 @@ type Run = Omit<PersistedGame, 'version'>;
 
 function freshRun(services: GameServices, locale: Locale = 'en'): Run {
   return {
-    gameState: createInitialState(),
+    gameState: createInitialState(undefined, services.maxTurns),
     displayedTurn: services.aiEnabled
       ? null
       : { currentEvent: STARTER_EVENTS[0], isAIGenerated: false },
@@ -24,9 +24,24 @@ function freshRun(services: GameServices, locale: Locale = 'en'): Run {
 }
 
 export function useGame(services: GameServices) {
-  const [run, setRun] = useState<Run>(() => loadSavedGame() ?? freshRun(services));
-  const { gameState, displayedTurn, ending } = run;
-  const [preview, setPreview] = useState<{ state: GameState; text: string } | null>(null);
+  const [run, setRun] = useState<Run>(() => {
+    const saved = loadSavedGame();
+    if (!saved) return freshRun(services);
+    if (saved.gameState.maxTurns === undefined) {
+      const length = saved.gameState.completed ? saved.gameState.history.length
+        : Math.max(services.maxTurns, saved.gameState.world.turn);
+      // Legacy runs beyond the API's 100-turn bound can still finish offline.
+      if (length >= 1 && length <= 100) saved.gameState = { ...saved.gameState, maxTurns: length };
+    }
+    if (services.aiEnabled) {
+      if (!saved.gameState.completed && saved.displayedTurn?.isAIGenerated
+        && saved.displayedTurn.generatedLocale !== saved.locale) saved.displayedTurn = null;
+      if (saved.ending?.id === 'ai_generated' && saved.ending.generatedLocale !== saved.locale) saved.ending = null;
+    }
+    return saved;
+  });
+  const { gameState, displayedTurn, ending, locale } = run;
+  const [preview, setPreview] = useState<{ state: GameState; locale: Locale; text: string } | null>(null);
 
   useEffect(() => {
     saveGame(run);
@@ -38,7 +53,7 @@ export function useGame(services: GameServices) {
     const controller = new AbortController();
     let active = true;
     const onNarrative = (text: string) => {
-      if (active && !controller.signal.aborted) setPreview({ state: gameState, text });
+      if (active && !controller.signal.aborted) setPreview({ state: gameState, locale, text });
     };
     // Deferring lets Strict Mode's initial cleanup cancel before issuing a request.
     void Promise.resolve().then(async () => {
@@ -46,21 +61,21 @@ export function useGame(services: GameServices) {
       if (gameState.completed) {
         let result;
         try {
-          result = await services.generateEnding(gameState, controller.signal, onNarrative);
+          result = await services.generateEnding(gameState, controller.signal, onNarrative, locale);
         } catch {
           result = getEnding(gameState);
         }
         if (active) setRun((current) => current.gameState === gameState
-          ? { ...current, ending: result } : current);
+          ? { ...current, ending: result.id === 'ai_generated' ? { ...result, generatedLocale: locale } : result } : current);
       } else {
         let result;
         try {
-          result = await services.generateTurn(gameState, controller.signal, onNarrative);
+          result = await services.generateTurn(gameState, controller.signal, onNarrative, locale);
         } catch {
           result = generateTurnEvents(gameState);
         }
         if (active) setRun((current) => current.gameState === gameState
-          ? { ...current, displayedTurn: result } : current);
+          ? { ...current, displayedTurn: result.isAIGenerated ? { ...result, generatedLocale: locale } : result } : current);
       }
     });
 
@@ -68,7 +83,7 @@ export function useGame(services: GameServices) {
       active = false;
       controller.abort();
     };
-  }, [gameState, displayedTurn, ending, services]);
+  }, [gameState, displayedTurn, ending, services, locale]);
 
   const selectAction = (event: Event, action: Action) => {
     setRun((current) => {
@@ -87,11 +102,16 @@ export function useGame(services: GameServices) {
 
   return {
     ...run,
-    narrative: preview?.state === gameState && (gameState.completed ? ending === null : displayedTurn === null) ? preview.text : '',
+    narrative: preview?.state === gameState && preview.locale === locale && (gameState.completed ? ending === null : displayedTurn === null) ? preview.text : '',
     isGenerating: !gameState.completed && displayedTurn === null,
     isGeneratingEnding: gameState.completed && ending === null,
     selectAction,
-    setLocale: (locale: Locale) => setRun((current) => ({ ...current, locale })),
+    setLocale: (locale: Locale) => setRun((current) => current.locale === locale ? current : ({
+      ...current, locale, gameState: { ...current.gameState },
+      displayedTurn: services.aiEnabled && !current.gameState.completed && current.displayedTurn?.isAIGenerated
+        ? null : current.displayedTurn,
+      ending: services.aiEnabled && current.ending?.id === 'ai_generated' ? null : current.ending,
+    })),
     restart: () => {
       clearSavedGame();
       setRun((current) => freshRun(services, current.locale));

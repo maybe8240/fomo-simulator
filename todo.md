@@ -13,25 +13,26 @@ do not explicitly state 你精疲力竭，但好奇心和混乱却达到了顶�
 
 ## Gameplay direction: recognizable reality, black humor, and consequences
 
-Planning only: the prompt drafts below are proposals, not changes to the running game.
+Implemented first phase: shared narrative policy, full bounded scene/choice context,
+saved run-relative pacing, and correct history action types. The drafts below
+record the design intent; subjective story quality and engagement require playtesting.
 
-- [ ] **Priority 1: Make the next event happen because of the previous choice.** Carry forward commitments, unpaid work, relationships, and obligations. Turn 2 should visibly follow from Turn 1 instead of introducing an unrelated opportunity.
-- [ ] **Priority 2: Give every choice a consequence.** Replace selection-only feedback with a short, specific result that solves one problem and creates or reveals another. Initially, put this at the start of the next event description; a separate immediate outcome screen requires additional implementation.
-- [ ] **Priority 3: Ground absurdity in incentives.** Satirize hiring, status, ownership, productivity measurement, and financial insecurity. The absurd option should exploit or obey a broken rule too literally, rather than add an unrelated mascot or random surreal object.
-- [ ] **Priority 4: Make all three options tempting and costly.** Each expresses a different compromise. Safe is not automatically sensible, risky is not automatically rewarding, and absurd is not automatically punished.
-- [ ] **Priority 5: Write concrete endings with callbacks.** Replace generic praise and stat recaps with a small scene showing what the player gained and what it cost. End on an image or line worth sharing; let players infer the social observation.
-- [ ] Preserve warmth and genuine relief. Some friends pay invoices; some ordinary jobs offer dignity. Avoid making every institution evil or every decision futile.
-- [ ] Support replay through different commitments and consequences, not just shuffled jokes. Recurring people and unresolved obligations should make each run feel like a particular life.
-- [ ] Fix the history label bug: generated actions currently default to "safe" in the history formatter. Preserve their actual action type or omit the classification when unknown. This is a data/presentation fix, not a prompt fix.
+- [x] **Priority 1: Make the next event happen because of the previous choice.** Carry forward commitments, unpaid work, relationships, and obligations. Turn 2 should visibly follow from Turn 1 instead of introducing an unrelated opportunity.
+- [x] **Priority 2: Give every choice a consequence.** Replace selection-only feedback with a short, specific result that solves one problem and creates or reveals another. Initially, put this at the start of the next event description; a separate immediate outcome screen requires additional implementation.
+- [x] **Priority 3: Ground absurdity in incentives.** Satirize hiring, status, ownership, productivity measurement, and financial insecurity. The absurd option should exploit or obey a broken rule too literally, rather than add an unrelated mascot or random surreal object.
+- [x] **Priority 4: Make all three options tempting and costly.** Each expresses a different compromise. Safe is not automatically sensible, risky is not automatically rewarding, and absurd is not automatically punished.
+- [x] **Priority 5: Write concrete endings with callbacks.** Replace generic praise and stat recaps with a small scene showing what the player gained and what it cost. End on an image or line worth sharing; let players infer the social observation.
+- [x] Preserve warmth and genuine relief. Some friends pay invoices; some ordinary jobs offer dignity. Avoid making every institution evil or every decision futile.
+- [x] Support replay through different commitments and consequences, not just shuffled jokes. Recurring people and unresolved obligations should make each run feel like a particular life.
+- [x] Fix the history label bug: generated actions currently default to "safe" in the history formatter. Preserve their actual action type or omit the classification when unknown. This is a data/presentation fix, not a prompt fix.
 
-### Proposed prompt changes
+### Prompt design implemented
 
-Apply one shared voice/consequence policy to both the opening narrator in
-server/narrator.ts and later events in server/prompts.ts. Updating only the opening
-would leave most of the run using the current generic instruction. Replace the
-fixed 20-turn hype arc with pacing based on the configured run length once that
-length is available to the server. Remove the unsupported "1 in 5" outcome promise;
-use occasional earned upside instead of pretending the prompt enforces odds.
+The opening and later events now use one shared voice/consequence policy from
+server/narrator.ts through server/prompts.ts. The fixed 20-turn hype arc has been
+replaced with pacing based on saved run length. The unsupported "1 in 5" outcome
+promise has been removed in favor of occasional earned upside. The following
+drafts remain the design reference for these implemented policies.
 
 #### Shared event instruction draft
 
@@ -96,13 +97,12 @@ Later turns:
 > next dilemma from it. Bring back a relevant unresolved commitment when supported
 > by the supplied context; do not reset the player's life between events.
 
-Once run length and continuity state are supplied:
+Turn-relative pacing now receives saved run length and bounded context:
 > This is turn {current_turn} of {max_turns}. Use the remaining choices to develop
 > the established conflict. Near the final turn, ask what the player is willing
 > to accept or give up; avoid introducing a completely new subplot.
 
-The placeholders above are proposed inputs, not variables currently wired into
-the prompt. For a five-choice run, aim for pressure -> commitment -> consequence
+The server now supplies current turn and saved run length in the prompt. For a five-choice run, aim for pressure -> commitment -> consequence
 -> personal callback -> final compromise. Longer runs should expand that rhythm
 rather than repeat the same five beats mechanically.
 
@@ -128,13 +128,13 @@ Example tone for the supplied Tallyo/agent run (illustrative, not a required plo
 > a founder, while payroll lists you as a contractor. On Friday, the agent refers
 > you for an opening that asks whether you have experience working under AI supervision.
 
-### Context and interface work needed beyond prompts
+### Context and interface implementation
 
-- [ ] Supply configured run length to the server before using turn-relative pacing. Keep the default five choices and avoid exposing arbitrary client prompt control.
-- [ ] Improve continuity context. Currently later events receive only the last three event titles/action labels; endings receive the full title/label history. This cannot reliably preserve old commitments or newly invented consequences. Choose bounded structured continuity state or a concise persistent story summary, with validation and a save compatibility decision.
-- [ ] Preserve actual action types in saved history so summaries and the UI stop misclassifying AI choices.
-- [ ] Decide how outcomes should appear. The first phase can open the next description with a consequence, but it still arrives after AI latency. An immediate outcome followed by a player-controlled Next button needs its own response/state/UI design; prompts alone cannot deliver that behavior. Keep actions unplayable until validated.
-- [ ] Keep prompt changes compatible with streamed narrative extraction: title, then description/summary, then choices for events. Continue validating complete responses and retaining static fallback.
+- [x] Supply configured run length to the server before using turn-relative pacing. Keep the default five choices and avoid exposing arbitrary client prompt control.
+- [x] Improve continuity context. Events and endings now receive all saved scene/choice excerpts and action types. Excerpts are bounded to 1,600/400 characters per entry; optional version-1 fields preserve old saves. Missing legacy context stays unknown.
+- [x] Preserve actual action types in saved history so summaries and the UI stop misclassifying AI choices.
+- [x] Decide how outcomes should appear. The first phase can open the next description with a consequence, but it still arrives after AI latency. An immediate outcome followed by a player-controlled Next button needs its own response/state/UI design; prompts alone cannot deliver that behavior. Keep actions unplayable until validated.
+- [x] Keep prompt changes compatible with streamed narrative extraction: title, then description/summary, then choices for events. Continue validating complete responses and retaining static fallback.
 
 ### Review criteria for sample runs
 

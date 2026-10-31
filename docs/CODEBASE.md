@@ -40,7 +40,7 @@ integration markers in the browser artifact.
    applies clamped deltas, appends history, and increments the turn.
 3. An unfinished run sets its event to null. Persistence records this pending
    state and generation begins. Refresh resumes the pending event, not the action.
-4. The frontend posts only `{ state }` to `/api/game/event` or `/api/game/ending`.
+4. The frontend posts `{ state, locale }` to `/api/game/event` or `/api/game/ending`.
 5. The server checks access, method, content type, origin, body size, bounded state,
    phase, and quota. It never forwards arbitrary client prompts/options upstream.
 6. With server AI off, static generation is returned. With AI on, the shared SDK
@@ -81,14 +81,16 @@ integration markers in the browser artifact.
 Stats start at 50 and are clamped to 0–100. The default five actions finish at
 turn counter 6. Static ending precedence is curiosity/chaos, chaos, network,
 AI skill with low chaos, then generalist. Static IDs link content, translations,
-and saved history. Schema version remains 1; there are no migrations.
+and saved history. Schema version remains 1; optional continuity fields extend it compatibly.
 
-The detailed narrator is used for the opening and describes a 20-turn arc;
-subsequent turns use a shorter prompt and three recent history entries. Endings
-use full bounded choice history. Current `choices` numeric deltas and legacy
-`events` English stat hints remain accepted. AI text stays English. AI history
-types still default to safe because stored history lacks action types. Stats,
-action badges/colors, and debug status remain development-only.
+Opening and later events share a stable policy for grounded absurdity, meaningful
+tradeoffs, and consequences. Both event and ending prompts receive the full
+bounded history, including stored scene/selected-action excerpts, as JSON story
+data. Run-relative instructions pace the final compromise using saved maxTurns.
+Current `choices` numeric deltas and legacy `events` English stat hints remain
+accepted. AI prose is generated directly in the selected language. Actual selected action types are saved; unknown
+legacy AI types are left unclassified. Stats, action badges/colors, and debug
+status remain development-only.
 
 ## Verification
 
@@ -117,7 +119,8 @@ an HTTP 502. Existing access checks, quotas, and generation deadlines still appl
 
 Stable system prompt blocks carry Anthropic ephemeral cache directives (default
 five-minute TTL); player stats and history follow outside the cache breakpoint.
-Opening, later-turn, and ending prompts remain separate to preserve their tone.
+Opening and later turns share a stable event policy; endings share its voice
+and continuity rules with their own output instruction.
 Cache hits require an identical prefix and the model-specific minimum token count.
 Haiku 4.5 requires 4,096 tokens: the current short system prompts are below that
 threshold, so this model will process them normally without cache hits. We do not
@@ -133,3 +136,57 @@ arrives and downloaded directly when the player clicks Share Run.
 The image includes localized ending/history and all final player/world stats,
 independently of viewport size and development-only panels. The download uses a local blob URL and does not call the Web Share API. No server
 endpoint, new dependency, or save-schema change is required.
+
+## Continuity and save compatibility
+
+Version-1 saves now optionally store `gameState.maxTurns` (1-100), and history
+fields `actionType`, `eventDescription` (first 1,600 characters), and `actionFlavor`
+(first 400 characters). Full playable events and downloaded history remain intact;
+excerpts are bounded context, not an AI-generated summary. New scenes can preserve
+previous consequences when their choices are selected. Event and ending prompts
+receive all recorded history rather than just the last three titles. Missing old
+scene details cannot be recovered; prompts treat them as unknown. The 32 KiB HTTP
+body limit remains in effect, so unusually long runs/content can still fall back
+to static generation instead of sending an oversized request.
+
+Existing version-1 saves remain readable. Missing action types are recovered from
+the static event catalog when possible; unknown AI choices omit the classification.
+On loading an old unfinished run, its length is set to the greater of the current
+configuration and its current turn (within the 100-turn API bound). An old completed
+run uses its actual choice count. New runs persist the configured length, which
+subsequent configuration changes do not alter. Optional fields are validated at
+both save and HTTP boundaries. Legacy runs beyond the API bound remain readable
+for offline play. No separate outcome screen or additional AI call was introduced:
+consequences lead the next narrative, and the final action resolves in the ending.
+
+Generation output budgets are 2,048 tokens per event and 512 for endings.
+For `claude-haiku-5-5` (including pinned versions), thinking is explicitly disabled
+so its default adaptive reasoning cannot consume the budget needed for game JSON.
+Responses stopped by `max_tokens` are rejected as `output_limit`. Server failure
+logs contain only a fixed reason category and, where available, an HTTP status;
+provider messages, response bodies, prompts, and credentials remain suppressed.
+
+## Generation language
+
+The game endpoints accept an optional `locale` limited to `en`/`zh` (English by
+default for older callers). `server/chinese.ts` supplies native Chinese voice,
+consequence, choice and ending instructions; the per-turn user prompts are also
+Chinese. JSON keys and action type enums remain English. There is no translation
+request. Each language has its own stable cache prefix. Language changes abort
+pending generation and replace unplayed AI scenes or AI endings without applying
+action effects again. Chosen history is preserved, including its original prose.
+Completed old-language scenes are hidden while viewing another language.
+
+Optional `generatedLocale` on saved AI events/endings remains compatible with
+version-1 saves and is validated. Legacy unplayed AI content without a known
+language is regenerated in the saved interface language when AI is enabled.
+Static content continues to use built-in localization.
+
+`server/network.ts` extracts only allowlisted network codes (including nested and
+aggregate causes); raw transport messages are never logged. The Claude transport
+retries transient connection failures once before any response is returned, with
+the original shared timeout and caller cancellation. SDK retries remain disabled.
+Response-body failures, HTTP statuses, certificate errors and permanent DNS errors
+are not retried. A response lost after acceptance may already have incurred a
+provider charge; the bounded retry can incur another. Application quotas count
+logical generation requests, not individual transport attempts.

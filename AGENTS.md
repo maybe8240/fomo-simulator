@@ -61,7 +61,7 @@
   Static event/action IDs also connect localization and saved history; preserve
   them unless intentionally changing compatibility.
 - Stats are clamped to 0–100. The final action increments the turn counter before
-  completion. Default length is five actions, not the narrator's 20-turn arc.
+  completion. Default length is five actions; narrative pacing follows the saved run length.
 - Saves use version 1 under `fomo-simulator-save`. Validate untrusted saved data.
   Document any schema/version changes and decide how old saves should behave.
 
