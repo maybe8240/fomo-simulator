@@ -83,7 +83,7 @@ function isValidEnding(value: unknown): value is Ending | null {
   }
 
   return isObject(value) && validGeneratedLocale(value)
-    && ['quiet_specialist', 'stable_generalist', 'chaotic_innovator', 'connected_builder',
+    && ['stat_limit', 'quiet_specialist', 'stable_generalist', 'chaotic_innovator', 'connected_builder',
       'delightfully_strange_person', 'ai_generated'].includes(String(value.id))
     && typeof value.title === 'string' && typeof value.summary === 'string';
 }

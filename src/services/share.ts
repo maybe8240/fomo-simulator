@@ -36,7 +36,7 @@ export async function createRunImage(state: GameState, ending: Ending, locale: L
     }
     y += heading ? 16 : 10;
   }
-  const localized = getLocalizedEnding(locale, ending.id, ending.title, ending.summary);
+  const localized = getLocalizedEnding(locale, ending.id, ending.title, ending.summary, state);
   text(translate(locale, 'app_title'), true);
   text(translate(locale, 'app_subtitle'));
   text(translate(locale, 'ending'), true);

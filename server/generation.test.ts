@@ -17,6 +17,21 @@ function service(value: unknown) {
   return { generation: createGenerationService(client, 'claude-haiku-4-5'), create };
 }
 describe('server-owned generation', () => {
+  it('sends the actual final status to endings in both languages', async () => {
+    const final = { ...state, completed: true,
+      player: { ...state.player, money: 4, energy: 3, network: 98, skill_ai: 81 },
+      world: { ...state.world, economy: 19, ai_hype: 88 } };
+    for (const locale of ['en', 'zh'] as const) {
+      const { generation, create } = service({ title: 'A New Path', summary: 'A concrete ending.' });
+      await generation.ending(final, new AbortController().signal, undefined, locale);
+      const request = create.mock.calls[0][0];
+      const prompt = request.messages[0].content;
+      expect(prompt).toContain(JSON.stringify(final.player));
+      expect(prompt).toContain(JSON.stringify(final.world));
+      expect(request.system[0].text).toContain(locale === 'en' ? 'AFTER the last choice' : '最后一次行动结算后的最终状态');
+      expect(request.system[0].text).toContain(locale === 'en' ? 'at least two salient' : '至少让两项');
+    }
+  });
   it('sends native Chinese system and user instructions to the SDK', async () => {
     const { generation, create } = service({ ...payload(), event_title: '报销证明', description: '代理拿到酬劳，你却没有发票。' });
     const turn = await generation.event(state, new AbortController().signal, undefined, 'zh');
@@ -81,7 +96,7 @@ describe('server-owned generation', () => {
     expect(await generation.ending(state, new AbortController().signal)).toEqual({
       id: 'ai_generated', title: 'A New Path', summary: 'You built a life.',
     });
-    expect(create.mock.calls[0][0].max_tokens).toBe(512);
+    expect(create.mock.calls[0][0].max_tokens).toBe(1024);
   });
   it('rejects a malformed ending', async () => {
     await expect(service({ title: {}, summary: 1 }).generation.ending(state, new AbortController().signal)).rejects.toThrow();

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getEnding } from './engine/endings';
+import { getStatLimits } from './engine/limits';
 import { STARTER_EVENTS } from './engine/events';
 import { generateTurnEvents } from './engine/generator';
 import { resolveAction } from './engine/resolver';
@@ -27,6 +28,10 @@ export function useGame(services: GameServices) {
   const [run, setRun] = useState<Run>(() => {
     const saved = loadSavedGame();
     if (!saved) return freshRun(services);
+    if (!saved.gameState.completed && saved.gameState.history.length > 0 && getStatLimits(saved.gameState).length) {
+      saved.gameState = { ...saved.gameState, completed: true };
+      saved.ending = null;
+    }
     if (saved.gameState.maxTurns === undefined) {
       const length = saved.gameState.completed ? saved.gameState.history.length
         : Math.max(services.maxTurns, saved.gameState.world.turn);

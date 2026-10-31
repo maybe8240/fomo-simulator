@@ -1,4 +1,6 @@
 import { STARTER_EVENTS } from './engine/events';
+import { getStatLimits } from './engine/limits';
+import type { GameState } from './engine/types';
 import type { ActionType, EndingId, HistoryEntry } from './engine/types';
 
 export type Locale = 'en' | 'zh';
@@ -393,6 +395,11 @@ const EVENT_TEXT: Dictionary = {
 };
 
 const ENDING_TEXT: Record<EndingId, LocalizedText & { summaryEn: string; summaryZh: string }> = {
+  stat_limit: {
+    en: 'A Limit Reached', zh: '人生触及边界',
+    summaryEn: 'A status reached its limit. The system has filed this under completed.',
+    summaryZh: '一项状态触及极限。系统已将这份人生标记为完成。',
+  },
   quiet_specialist: {
     en: 'Quiet Specialist',
     zh: '安静的专家',
@@ -473,9 +480,18 @@ export function getLocalizedEnding(
   endingId: EndingId,
   fallbackTitle: string,
   fallbackSummary: string,
+  state?: GameState,
 ): { title: string; summary: string } {
   if (endingId === 'ai_generated') {
     return { title: fallbackTitle, summary: fallbackSummary };
+  }
+  if (endingId === 'stat_limit' && state) {
+    const limits = getStatLimits(state).map(limit => `${translate(locale, limit.key)}${locale === 'zh' ? '达到' : ' reached '}${limit.value}`);
+    return {
+      title: ENDING_TEXT.stat_limit[locale],
+      summary: locale === 'zh' ? `本局因${limits.join('、')}而结束。系统已将这份人生标记为完成。`
+        : `Your run ended when ${limits.join(', ')}. The system has filed this under completed.`,
+    };
   }
 
   const entry = ENDING_TEXT[endingId];
@@ -519,6 +535,9 @@ export function getLocalizedHistoryEntry(
       ? `你在“${eventTitle}”中选择了${actionType ? getLocalizedActionType(locale, actionType) : ''}选项“${actionLabel}”。`
       : `You chose the ${actionType ? getLocalizedActionType(locale, actionType).toLowerCase() + ' ' : ''}option "${actionLabel}" from "${eventTitle}".`;
 
+  const missedLine = (type: ActionType, label: string) => locale === 'zh'
+    ? `你没有选择${getLocalizedActionType(locale, type)}选项“${label}”。`
+    : `You did not choose the ${getLocalizedActionType(locale, type).toLowerCase()} option "${label}".`;
   const missedPathsText =
     event?.actions
       .filter((candidate) => candidate.id !== entry.actionId)
@@ -529,7 +548,13 @@ export function getLocalizedHistoryEntry(
         return locale === 'zh'
           ? `你没有选择${typeLabel}选项“${label}”。`
           : `You did not choose the ${typeLabel.toLowerCase()} option "${label}".`;
-      }) ?? entry.missedPathsText;
+      }) ?? entry.missedActions?.map(candidate => missedLine(candidate.type, candidate.label))
+      ?? entry.missedPathsText.map(line => {
+        // Older version-1 AI saves kept the wrapper as English prose. Recover
+        // only that known format; labels remain the original generated text.
+        const match = line.match(/^You did not choose the (safe|risky|absurd) option "(.*)"\.$/s);
+        return match ? missedLine(match[1] as ActionType, match[2]) : line;
+      });
 
   const metaText =
     locale === 'zh'

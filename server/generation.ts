@@ -61,7 +61,7 @@ export function createGenerationService(client: Anthropic | null, model: string)
     async ending(state, signal, onNarrative, locale = 'en') {
       if (!client) return getEnding(state);
       const result = parseEndingResponse(await generate(buildEndingSystemPrompt(locale),
-        buildEndingPrompt({ playerState: state.player, worldState: state.world, history: state.history, maxTurns: state.maxTurns }, locale), 512, signal, onNarrative));
+        buildEndingPrompt({ playerState: state.player, worldState: state.world, history: state.history, maxTurns: state.maxTurns }, locale), 1024, signal, onNarrative));
       const ending = { id: 'ai_generated' as const, title: result.title, summary: result.summary };
       if (!result.success || !isEnding(ending)) throw new GenerationError('invalid_ending');
       return ending;

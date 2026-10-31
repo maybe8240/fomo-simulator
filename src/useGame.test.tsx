@@ -30,6 +30,43 @@ function services(): GameServices {
 }
 
 describe('run lifecycle', () => {
+  it('finishes an old unfinished save at a boundary without applying another choice', async () => {
+    const state = createGameServices({ aiEnabled: false, maxTurns: 5 });
+    const first = renderHook(() => useGame(state));
+    choose(first.result);
+    await waitFor(() => expect(first.result.current.displayedTurn).not.toBeNull());
+    const saved = loadSavedGame()!;
+    first.unmount();
+    saved.gameState.player.energy = 0;
+    saveGame(saved);
+    const service = services();
+    const resumed = renderHook(() => useGame(service));
+    await waitFor(() => expect(resumed.result.current.ending).not.toBeNull());
+    expect(resumed.result.current.gameState.completed).toBe(true);
+    expect(resumed.result.current.gameState.history).toHaveLength(1);
+    expect(resumed.result.current.gameState.world.turn).toBe(2);
+    expect(service.generateTurn).not.toHaveBeenCalled();
+    expect(service.generateEnding).toHaveBeenCalledTimes(1);
+  });
+  it('requests an ending immediately after a stat limit and restores it on reload', async () => {
+    const service = services();
+    const event = { ...STARTER_EVENTS[0], actions: STARTER_EVENTS[0].actions.map(action => ({ ...action, playerDelta: { energy: -100 }, worldDelta: {} })) };
+    service.generateTurn = vi.fn().mockResolvedValue({ currentEvent: event, isAIGenerated: true });
+    const first = renderHook(() => useGame(service));
+    await waitFor(() => expect(first.result.current.displayedTurn).not.toBeNull());
+    choose(first.result);
+    await waitFor(() => expect(first.result.current.ending).not.toBeNull());
+    expect(service.generateTurn).toHaveBeenCalledTimes(1);
+    expect(service.generateEnding).toHaveBeenCalledTimes(1);
+    expect(first.result.current.gameState.world.turn).toBe(2);
+    first.unmount();
+    const secondService = services();
+    const second = renderHook(() => useGame(secondService));
+    expect(second.result.current.gameState.completed).toBe(true);
+    expect(second.result.current.ending).not.toBeNull();
+    expect(secondService.generateTurn).not.toHaveBeenCalled();
+    expect(secondService.generateEnding).not.toHaveBeenCalled();
+  });
   it('generates a fresh Chinese ending after switching a completed run', async () => {
     const service = services();
     service.maxTurns = 1;

@@ -6,6 +6,17 @@ import { resolveAction } from '../src/engine/resolver';
 import { STARTER_EVENTS } from '../src/engine/events';
 
 describe('consequence-driven prompts', () => {
+  it('centers all terminal statuses in early-ending prompts in both languages', () => {
+    const state = createInitialState(1, 5);
+    state.player.money = 0;
+    state.world.ai_hype = 100;
+    for (const locale of ['en', 'zh'] as const) {
+      const prompt = buildEndingPrompt({ playerState: state.player, worldState: state.world, history: [], maxTurns: 5 }, locale);
+      expect(prompt).toContain('"key":"money","value":0');
+      expect(prompt).toContain('"key":"ai_hype","value":100');
+      expect(prompt).toContain(locale === 'en' ? 'central cause of the ending' : '结局必须以这些状态为主要原因');
+    }
+  });
   it('uses Chinese instructions for original Chinese events and endings, preserving JSON enums', () => {
     const state = createInitialState(1, 5);
     const eventSystem = buildEventSystemPrompt('zh');
@@ -13,8 +24,15 @@ describe('consequence-driven prompts', () => {
     expect(eventSystem).not.toContain('All generated prose must be English');
     expect(eventSystem).toContain('"type":"risky"');
     expect(buildEventPrompt({ playerState: state.player, worldState: state.world, recentHistory: [], maxTurns: 5 }, true, 'zh')).toContain('当前为第1回合，共5次选择');
-    expect(buildEndingSystemPrompt('zh')).toContain('恰好两句简洁中文');
+    expect(buildEndingSystemPrompt('zh')).toContain('220至350个汉字');
     expect(buildEndingPrompt({ playerState: state.player, worldState: state.world, history: [] }, 'zh')).toContain('不先写英文再翻译');
+  });
+  it('asks for short tense events and detailed endings in both languages', () => {
+    expect(buildEventSystemPrompt()).toContain('exactly two tight description sentences');
+    expect(buildEventSystemPrompt()).toContain('35-60 words');
+    expect(buildEventSystemPrompt('zh')).toContain('约60至100个汉字');
+    expect(buildEndingSystemPrompt()).toContain('120-180 words in 5-7 sentences');
+    expect(buildEndingSystemPrompt('zh')).toContain('写5至7句');
   });
   it('retains early scenes, selected action details and types beyond three turns', () => {
     let state = createInitialState(1, 5);

@@ -61,8 +61,9 @@ are records of those options, not simulated alternate outcomes. The on-page
 history shows the latest turn first. Duplicate selections for an event that has
 already advanced are ignored.
 
-Numeric stat panels and choice-type badges are development aids and are hidden
-during production play. Final stats still appear in the downloadable recap.
+Numeric stat panels are development aids and are hidden during production play.
+Choice buttons display titles only, without detailed descriptions, category badges,
+or colored backgrounds in either development or production. Final stats still appear in the downloadable recap.
 
 ## 4. Continue the story
 
@@ -139,3 +140,31 @@ content. If browser AI is off, the game uses built-in content directly.
 Restart the relevant local processes after changing settings. See
 [README](../README.md) for setup and [CODEBASE](CODEBASE.md) for implementation
 ownership and technical constraints.
+
+AI pacing targets: event descriptions use two tense sentences (35-60 English
+words or about 60-100 Chinese characters), keeping the prior consequence and a
+concrete dilemma. Endings expand to 5-7 sentences (120-180 English words or about
+220-350 Chinese characters) with callbacks, daily-life details and specific costs.
+These are prompt targets rather than text truncation rules; the ending output
+budget is 1,024 tokens. Static fallback prose is unchanged.
+
+Endings explicitly use the post-final-choice player/world status as well as
+choice history. Prompts in both languages ask for at least two salient status
+aspects in concrete daily-life details, reflecting strengths and constraints
+when supported, without listing scores or inventing extremes from average stats.
+
+## Status-limit completion
+
+After each action, the game clamps and checks all six player stats plus world
+AI hype and economy. Any value at 0 or 100 completes the run immediately, even
+when planned choices remain; the turn counter itself is excluded. The triggering
+action is recorded and the counter increments once before ending generation.
+Simultaneous limits are all supplied to the ending prompt as the central cause,
+in both English and Chinese. Static fallback endings identify each limiting stat
+and value, including in exported images. High values are not automatically wins.
+
+Version-1 saves remain readable. Early completion is valid before maxTurns only
+when a stat is at a boundary. Old unfinished saves already at a boundary after a
+recorded choice now resume at the ending, retaining that choice and clearing any
+old ending. Existing completed saves keep their saved ending. No extra choice is
+applied on refresh. Ordinary runs still finish at their configured turn limit.

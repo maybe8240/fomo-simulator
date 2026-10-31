@@ -145,3 +145,5 @@ Example tone for the supplied Tallyo/agent run (illustrative, not a required plo
 - [ ] The ending contains a specific callback and a lived consequence, without a stat recital or generic praise.
 - [ ] Different paths produce meaningfully different lives; include both hardship and genuine relief.
 - [ ] Compare player reactions across sample runs: which line they remember, whether they can explain how a choice changed the story, and whether they want to try another path. Treat engagement gains as hypotheses to test, not guaranteed results.
+
+- [x] Adjust AI reading pace: two-sentence events with a concrete threat/tradeoff; expand endings to 5-7 sentences with lived details and callbacks. This supersedes the earlier 3-5-sentence event and two-sentence ending drafts above.

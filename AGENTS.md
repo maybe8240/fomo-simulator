@@ -33,8 +33,8 @@
   that were not run; explicitly identify any checks that were skipped.
 - Tests must stay offline. Inject `GameServices` or a mocked fetch function; never
   make real Anthropic requests or add credentials to tests or source control.
-- For UI changes, check dev and production preview behavior. Stats and action
-  type badges intentionally appear only in development.
+- For UI changes, check dev and production preview behavior. Stats intentionally appear only in development. Choice buttons show only titles,
+  with no category badges or colored backgrounds.
 
 ## Safety
 
@@ -61,7 +61,8 @@
   Static event/action IDs also connect localization and saved history; preserve
   them unless intentionally changing compatibility.
 - Stats are clamped to 0–100. The final action increments the turn counter before
-  completion. Default length is five actions; narrative pacing follows the saved run length.
+  completion. Default length is five actions; any player/world stat at 0 or 100 ends the run early.
+  Narrative pacing follows the saved run length.
 - Saves use version 1 under `fomo-simulator-save`. Validate untrusted saved data.
   Document any schema/version changes and decide how old saves should behave.
 

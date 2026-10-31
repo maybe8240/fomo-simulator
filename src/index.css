@@ -158,21 +158,6 @@ h1 {
   font-style: normal;
 }
 
-.event-badge--safe {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.event-badge--risky {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.event-badge--absurd {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
 .event-badge--ai {
   background: #8b5cf6;
   color: #ffffff;
@@ -197,67 +182,30 @@ h1 {
 }
 
 .action-button {
-  display: grid;
-  gap: 0.3rem;
+  display: block;
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #d4d4d8;
   border-radius: 0.6rem;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: transparent;
+  color: #1f2937;
   text-align: left;
   font: inherit;
   cursor: pointer;
 }
 
-.action-button:hover {
-  background: #dbeafe;
+.action-button:hover:not(:disabled) {
+  border-color: #52525b;
 }
 
-.action-button--safe {
-  border-color: #86efac;
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.action-button--safe:hover {
-  background: #dcfce7;
-}
-
-.action-button--risky {
-  border-color: #fcd34d;
-  background: #fffbeb;
-  color: #92400e;
-}
-
-.action-button--risky:hover {
-  background: #fef3c7;
-}
-
-.action-button--absurd {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.action-button--absurd:hover {
-  background: #fee2e2;
+.action-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .action-button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
-}
-
-.action-button__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.action-button small {
-  color: #334155;
 }
 
 .history-log {

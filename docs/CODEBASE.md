@@ -89,8 +89,8 @@ bounded history, including stored scene/selected-action excerpts, as JSON story
 data. Run-relative instructions pace the final compromise using saved maxTurns.
 Current `choices` numeric deltas and legacy `events` English stat hints remain
 accepted. AI prose is generated directly in the selected language. Actual selected action types are saved; unknown
-legacy AI types are left unclassified. Stats, action badges/colors, and debug
-status remain development-only.
+legacy AI types are left unclassified. Stats and debug status remain development-only. Choice buttons show only titles,
+with no category badges or colored backgrounds.
 
 ## Verification
 
@@ -159,7 +159,7 @@ both save and HTTP boundaries. Legacy runs beyond the API bound remain readable
 for offline play. No separate outcome screen or additional AI call was introduced:
 consequences lead the next narrative, and the final action resolves in the ending.
 
-Generation output budgets are 2,048 tokens per event and 512 for endings.
+Generation output budgets are 2,048 tokens per event and 1,024 for endings.
 For `claude-haiku-5-5` (including pinned versions), thinking is explicitly disabled
 so its default adaptive reasoning cannot consume the budget needed for game JSON.
 Responses stopped by `max_tokens` are rejected as `output_limit`. Server failure
@@ -190,3 +190,38 @@ Response-body failures, HTTP statuses, certificate errors and permanent DNS erro
 are not retried. A response lost after acceptance may already have incurred a
 provider charge; the bounded retry can incur another. Application quotas count
 logical generation requests, not individual transport attempts.
+
+AI pacing targets: event descriptions use two tense sentences (35-60 English
+words or about 60-100 Chinese characters), keeping the prior consequence and a
+concrete dilemma. Endings expand to 5-7 sentences (120-180 English words or about
+220-350 Chinese characters) with callbacks, daily-life details and specific costs.
+These are prompt targets rather than text truncation rules; the ending output
+budget is 1,024 tokens. Static fallback prose is unchanged.
+
+Endings explicitly use the post-final-choice player/world status as well as
+choice history. Prompts in both languages ask for at least two salient status
+aspects in concrete daily-life details, reflecting strengths and constraints
+when supported, without listing scores or inventing extremes from average stats.
+
+## Status-limit completion
+
+After each action, the game clamps and checks all six player stats plus world
+AI hype and economy. Any value at 0 or 100 completes the run immediately, even
+when planned choices remain; the turn counter itself is excluded. The triggering
+action is recorded and the counter increments once before ending generation.
+Simultaneous limits are all supplied to the ending prompt as the central cause,
+in both English and Chinese. Static fallback endings identify each limiting stat
+and value, including in exported images. High values are not automatically wins.
+
+Version-1 saves remain readable. Early completion is valid before maxTurns only
+when a stat is at a boundary. Old unfinished saves already at a boundary after a
+recorded choice now resume at the ending, retaining that choice and clearing any
+old ending. Existing completed saves keep their saved ending. No extra choice is
+applied on refresh. Ordinary runs still finish at their configured turn limit.
+
+History entries optionally store `missedActions` (up to two validated type/label
+pairs). This lets AI unchosen-option sentences follow the interface language
+in both the history log and PNG recap. Legacy version-1 English wrappers are
+recognized and rebuilt locally in the selected language; generated labels are
+preserved, with no AI translation call. Selected-action and turn wrappers also
+continue to use the current interface language.

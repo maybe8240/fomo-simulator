@@ -12,7 +12,7 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
     selectAction, setLocale, restart, narrative } = useGame(services);
   const currentEvent = displayedTurn?.currentEvent;
   const localizedEnding = ending
-    ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary)
+    ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary, gameState)
     : null;
 
   return (

@@ -188,7 +188,7 @@ stats panel remains development-only.
 If generation returns 502, inspect the backend terminal for a safe failure category
 (such as `output_limit`, `provider_rejected`, or `provider_connection`). Haiku 5.5
 game requests disable adaptive thinking and reserve 2,048 output tokens per event
-and 512 per ending to avoid truncated JSON. Restart the backend after updates.
+and 1,024 per ending to avoid truncated JSON. Restart the backend after updates.
 
 Connection failures now include an allowlisted `network` code in backend logs;
 provider timeouts use `provider_timeout`. Transient connection errors get one
@@ -196,3 +196,19 @@ retry before response headers arrive, within the same 30-second transport
 deadline. Certificate errors, permanent DNS failures, HTTP errors and interrupted
 response streams are not retried. Persistent network errors still use static
 fallback; the safe code helps distinguish DNS, TLS, routing and socket failures.
+
+## Status-limit completion
+
+After each action, the game clamps and checks all six player stats plus world
+AI hype and economy. Any value at 0 or 100 completes the run immediately, even
+when planned choices remain; the turn counter itself is excluded. The triggering
+action is recorded and the counter increments once before ending generation.
+Simultaneous limits are all supplied to the ending prompt as the central cause,
+in both English and Chinese. Static fallback endings identify each limiting stat
+and value, including in exported images. High values are not automatically wins.
+
+Version-1 saves remain readable. Early completion is valid before maxTurns only
+when a stat is at a boundary. Old unfinished saves already at a boundary after a
+recorded choice now resume at the ending, retaining that choice and clearing any
+old ending. Existing completed saves keep their saved ending. No extra choice is
+applied on refresh. Ordinary runs still finish at their configured turn limit.

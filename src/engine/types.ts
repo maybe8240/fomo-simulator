@@ -56,6 +56,7 @@ export type HistoryEntry = {
   actionType?: ActionType;
   eventDescription?: string;
   actionFlavor?: string;
+  missedActions?: { type: ActionType; label: string }[];
   turn: number;
   eventId: string;
   eventTitle: string;
@@ -75,6 +76,7 @@ export type GameState = {
 };
 
 export type EndingId =
+  | 'stat_limit'
   | 'quiet_specialist'
   | 'stable_generalist'
   | 'chaotic_innovator'

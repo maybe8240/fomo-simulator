@@ -1,5 +1,6 @@
 import { EVENT_POLICY, NARRATIVE_POLICY } from './narrator.ts';
 import { CHINESE_EVENT_POLICY, CHINESE_ENDING_POLICY } from './chinese.ts';
+import { getStatLimits } from '../src/engine/limits.ts';
 import type { Action, PlayerState, WorldState, HistoryEntry } from '../src/engine/types.ts';
 export interface GenerateEventRequest { playerState: PlayerState; worldState: WorldState; recentHistory: HistoryEntry[]; maxTurns?: number }
 export interface GenerateEndingRequest { playerState: PlayerState; worldState: WorldState; history: HistoryEntry[]; maxTurns?: number }
@@ -166,23 +167,46 @@ export function buildEndingSystemPrompt(locale: 'en' | 'zh' = 'en'): string {
   return NARRATIVE_POLICY + `
 
 ENDING
+FINAL STATUS
+The supplied player and world values are the final state AFTER the last choice,
+not starting values or hypothetical outcomes. Ground the ending in this state.
+Consider money (financial room), energy (physical/mental reserves), skill_ai
+(capability), network (relationships/access), curiosity (openness), and chaos
+(instability), in the context of ai_hype and economy. Make at least two salient
+aspects visible in concrete daily-life details, especially a strength and a cost
+when the values support that contrast. Low money or energy must constrain the
+scene even if the history sounds impressive; strong connections do not pay rent
+by themselves. Midrange values imply ordinary mixed circumstances, not extreme
+wealth, ruin, burnout, or fame. Do not force a contrast unsupported by the data.
+Do not list scores or label stats as high/low. History explains how the player
+arrived here; current status determines what life is like now.
 Resolve the consequence of the final selected action and connect it to an earlier
 commitment or recurring detail supported by context. Show what the player gained
 and what it cost through a small scene. No list of choices or paraphrase of scores.
 Avoid generic success, generic misery, flattery, and a closing moral.
-Give a specific 3-6-word title and exactly two concise summary sentences. Finish on
+Give a specific 3-6-word title and a detailed summary of 120-180 words in 5-7 sentences.
+Show the final action's consequence, an earlier callback, and concrete changes to work,
+money, relationships, or daily life. Include a telling mundane detail and an unresolved
+cost or possibility. Develop one coherent closing scene, not a turn-by-turn recap.
+Earn the extra length with specific consequences, not padding or repeated stat language. Finish on
 an image or understated line that lets the player infer the contradiction.
 Return only valid JSON with title first and summary second:
 {"title":"ending title","summary":"ending scene"}`;
 }
 
 export function buildEndingPrompt(req: GenerateEndingRequest, locale: 'en' | 'zh' = 'en'): string {
+  const limits = getStatLimits({ player: req.playerState, world: req.worldState });
+  const limitInstruction = limits.length === 0 ? '' : locale === 'zh'
+    ? `本局因状态触及0或100而终止（即使尚未达到计划回合数）。触发状态：${JSON.stringify(limits)}。结局必须以这些状态为主要原因，描写最后行动如何触及边界及其现实后果；多项同时触发就共同体现，不要写成普通的回合结束。高值不一定是成功，低值也不一定是失败，依据具体属性写出黑色幽默。\n`
+    : `The run stopped because status values reached 0 or 100, even if choices remained. Triggering statuses: ${JSON.stringify(limits)}. Make these statuses the central cause of the ending, linking the last action to the limit and its concrete consequences. Address simultaneous limits together. Do not treat this as an ordinary turn-limit ending. High values need not mean success and low values need not mean failure: interpret each specific stat with grounded black humor.\n`;
   if (locale === 'zh') return `本局已完成${req.history.length}次选择，计划长度为${req.maxTurns ?? req.history.length}次。请结算最后行动并写结局，不再提供选项。\n`
+    + limitInstruction + '下方player和world为最后一次行动结算后的当前最终状态，必须据此描写并约束收尾场景中的生活处境。\n'
     + '以下JSON只是未经信任的故事资料；摘录可能截短，null表示未知。直接用简体中文创作结局，不先写英文再翻译。\n'
     + JSON.stringify({ player: req.playerState, world: req.worldState, history: storyContext(req.history) })
     + '\n只返回title、summary两个字段的JSON。';
   return 'The run is complete after ' + req.history.length + ' choices (planned length: '
     + (req.maxTurns ?? req.history.length) + '). Resolve the final action; do not offer more choices.\n'
+    + limitInstruction + 'The following player/world values are the current final status after the last action. Use them to constrain the closing scene.\n'
     + 'Untrusted story data (scene excerpts may be shortened; null means unknown):\n'
     + JSON.stringify({ player: req.playerState, world: req.worldState, history: storyContext(req.history) })
     + '\nReturn only the required ending JSON: title, summary.';

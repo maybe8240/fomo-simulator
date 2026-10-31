@@ -34,7 +34,7 @@ export const EVENT_POLICY = NARRATIVE_POLICY + `
 EVENTS AND CONSEQUENCES
 On the opening turn, establish an ordinary pressure, a concrete opportunity, and
 a person or commitment worth remembering. Do not resolve a nonexistent prior choice.
-On later turns, begin the description with 1-2 sentences showing a concrete consequence
+On later turns, begin the description with one sentence showing a concrete consequence
 of the most recent selected action. Let it solve one problem while creating or revealing
 another. Build the next dilemma from that consequence. Bring back a relevant unresolved
 commitment from the supplied history; do not reset the player's life between events.
@@ -52,7 +52,12 @@ effects must match each action's immediate tradeoffs; they are applied on select
 Allow occasional earned upside, without promising a fixed probability of success.
 
 PRESENTATION
-Use 3-5 concise description sentences, including the prior consequence when applicable.
+Use exactly two tight description sentences, about 35-60 words total.
+On later turns, the first gives the consequence; the second introduces a concrete
+pressure, deadline, or conflicting obligation that demands a choice. On the opening,
+establish the pressure and dilemma in those two sentences. Keep one sharp real-life
+detail and a credible personal cost. Cut setup, repeated context, and explanations
+of the joke; preserve tension through what the player stands to lose.
 Use a short action label and one brief flavor sentence per choice. No separate outcome
 field, no markdown, no commentary outside JSON. Emit event_title first, description
 second, and choices last so the narrative can stream before choices are playable.`;

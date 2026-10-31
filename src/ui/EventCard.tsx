@@ -1,7 +1,6 @@
 import type { Action, Event } from '../engine/types';
 import {
   getLocalizedActionText,
-  getLocalizedActionType,
   getLocalizedEventText,
 } from '../i18n';
 import type { Locale } from '../i18n';
@@ -12,8 +11,6 @@ type EventCardProps = {
   locale: Locale;
   onSelectAction: (event: Event, action: Action) => void;
 };
-
-const isDevMode = import.meta.env.DEV;
 
 function EventCard({ event, disabled, locale, onSelectAction }: EventCardProps) {
   return (
@@ -29,25 +26,13 @@ function EventCard({ event, disabled, locale, onSelectAction }: EventCardProps) 
       <div className="action-stack">
         {event.actions.map((action) => (
           <button
-            className={`action-button ${isDevMode ? `action-button--${action.type}` : ''}`}
+            className="action-button"
             disabled={disabled}
             key={action.id}
             onClick={() => onSelectAction(event, action)}
             type="button"
           >
-            <span className="action-button__label-row">
-              <strong>
-                {getLocalizedActionText(locale, action.id, 'label', action.label)}
-              </strong>
-              {isDevMode && (
-                <em className={`event-badge event-badge--${action.type}`}>
-                  {getLocalizedActionType(locale, action.type)}
-                </em>
-              )}
-            </span>
-            <small>
-              {getLocalizedActionText(locale, action.id, 'flavor', action.flavor)}
-            </small>
+            <strong>{getLocalizedActionText(locale, action.id, 'label', action.label)}</strong>
           </button>
         ))}
       </div>
