@@ -43,10 +43,10 @@ describe('persisted story continuity', () => {
       expect(isGameState(state)).toBe(false);
       expect(loadSavedGame()).toBeNull();
     });
-  it('bounds scene excerpts without losing the full displayed event', () => {
+  it('retains the full bounded event description for history', () => {
     const event = { ...STARTER_EVENTS[0], description: 'x'.repeat(6000) };
     const state = resolveAction(createInitialState(1), event, event.actions[0], { currentEvent: event });
-    expect(state.history[0].eventDescription).toHaveLength(1600);
+    expect(state.history[0].eventDescription).toHaveLength(6000);
     expect(event.description).toHaveLength(6000);
   });
 });

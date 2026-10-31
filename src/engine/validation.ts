@@ -17,7 +17,7 @@ export function validHistoryContext(value: Record<string, unknown>): boolean {
     && (value.missedActions === undefined || (Array.isArray(value.missedActions) && value.missedActions.length <= 2
       && value.missedActions.every(action => object(action) && typeof action.type === 'string'
         && ['safe', 'risky', 'absurd'].includes(action.type) && text(action.label))))
-    && (value.eventDescription === undefined || (typeof value.eventDescription === 'string' && value.eventDescription.length <= 1600))
+    && (value.eventDescription === undefined || (typeof value.eventDescription === 'string' && value.eventDescription.length <= 6000))
     && (value.actionFlavor === undefined || (typeof value.actionFlavor === 'string' && value.actionFlavor.length <= 400));
 }
 export function validRunLength(value: Record<string, unknown>): boolean {

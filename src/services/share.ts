@@ -49,8 +49,8 @@ export async function createRunImage(state: GameState, ending: Ending, locale: L
   for (const entry of state.history) {
     const item = getLocalizedHistoryEntry(locale, entry);
     text(item.metaText, true);
-    text(item.resultText);
-    for (const missed of item.missedPathsText) text(`• ${missed}`);
+    text(item.eventDescription);
+    text(item.chosenText);
     y += 16;
   }
   // Keep unusually long saved runs within common canvas dimension limits.

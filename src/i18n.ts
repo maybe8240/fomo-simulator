@@ -13,6 +13,9 @@ type LocalizedText = {
 type Dictionary = Record<string, LocalizedText>;
 
 const UI_TEXT: Dictionary = {
+  generation_timeout: { en: 'AI generation timed out. Showing a built-in event or ending so you can keep playing.', zh: 'AI生成超时，已使用内置事件或结局，你可以继续游戏。' },
+  chosen_option: { en: 'You chose to', zh: '你选择了' },
+  history_description_unavailable: { en: 'Description unavailable for this older entry.', zh: '这条旧记录未保存事件描述。' },
   share_run: { en: 'Share Run', zh: '分享本次人生' },
   final_stats: { en: 'Final Stats', zh: '最终状态' },
   preparing_share: { en: 'Preparing your image...', zh: '正在生成分享图片……' },
@@ -515,6 +518,8 @@ export function getLocalizedHistoryEntry(
   entry: HistoryEntry,
 ): {
   eventTitle: string;
+  eventDescription: string;
+  chosenText: string;
   actionLabel: string;
   resultText: string;
   missedPathsText: string[];
@@ -529,6 +534,13 @@ export function getLocalizedHistoryEntry(
     ? getLocalizedActionText(locale, action.id, 'label', entry.actionLabel)
     : entry.actionLabel;
   const actionType = entry.actionType ?? action?.type;
+  const eventDescription = event
+    ? getLocalizedEventText(locale, event.id, 'description', event.description)
+    : entry.eventDescription ?? translate(locale, 'history_description_unavailable');
+  const choice = actionLabel.trim().replace(/[.!?。！？]+$/u, '');
+  const chosenText = locale === 'zh'
+    ? `${translate(locale, 'chosen_option')}${choice}。`
+    : `${translate(locale, 'chosen_option')} ${choice.replace(/^[A-Z](?=[a-z])/, letter => letter.toLowerCase())}.`;
 
   const resultText =
     locale === 'zh'
@@ -558,11 +570,13 @@ export function getLocalizedHistoryEntry(
 
   const metaText =
     locale === 'zh'
-      ? `第 ${entry.turn} 回合 • ${eventTitle} • ${actionLabel}`
-      : `Turn ${entry.turn} • ${eventTitle} • ${actionLabel}`;
+      ? `第 ${entry.turn} 回合 • ${eventTitle}`
+      : `Turn ${entry.turn} • ${eventTitle}`;
 
   return {
     eventTitle,
+    eventDescription,
+    chosenText,
     actionLabel,
     resultText,
     missedPathsText,

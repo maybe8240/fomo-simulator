@@ -280,6 +280,13 @@ h1 {
   gap: 0.65rem;
 }
 
+.timeout-notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 0.6rem;
+  color: #52525b;
+}
+
 .loading-spinner {
   width: 1rem;
   height: 1rem;

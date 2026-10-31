@@ -107,7 +107,7 @@ upload. The image contains:
 
 - The game title and ending title/summary.
 - All six final player stats and both final world stats.
-- The full chronological history, including choices and missed paths.
+- The full chronological history, including event descriptions and chosen options.
 
 Built-in text and newly generated AI text use the selected language. Earlier
 chosen history retains its original language.

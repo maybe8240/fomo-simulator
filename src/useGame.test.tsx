@@ -30,6 +30,54 @@ function services(): GameServices {
 }
 
 describe('run lifecycle', () => {
+  it('restores exact language versions across repeated toggles and reloads, then clears them on advancement', async () => {
+    const service = services();
+    service.generateTurn = vi.fn().mockResolvedValueOnce({ ...turn(0), isAIGenerated: true })
+      .mockResolvedValueOnce({ ...turn(1), isAIGenerated: true }).mockResolvedValue({ ...turn(2), isAIGenerated: true });
+    const first = renderHook(() => useGame(service));
+    await waitFor(() => expect(first.result.current.displayedTurn).not.toBeNull());
+    const english = first.result.current.displayedTurn;
+    act(() => first.result.current.setLocale('zh'));
+    await waitFor(() => expect(first.result.current.displayedTurn?.generatedLocale).toBe('zh'));
+    const chinese = first.result.current.displayedTurn;
+    for (let i = 0; i < 3; i++) {
+      act(() => first.result.current.setLocale('en'));
+      expect(first.result.current.displayedTurn).toEqual(english);
+      act(() => first.result.current.setLocale('zh'));
+      expect(first.result.current.displayedTurn).toEqual(chinese);
+    }
+    expect(service.generateTurn).toHaveBeenCalledTimes(2);
+    first.unmount();
+    const resumed = renderHook(() => useGame(service));
+    expect(resumed.result.current.displayedTurn).toEqual(chinese);
+    act(() => resumed.result.current.setLocale('en'));
+    expect(resumed.result.current.displayedTurn).toEqual(english);
+    expect(service.generateTurn).toHaveBeenCalledTimes(2);
+    choose(resumed.result);
+    await waitFor(() => expect(service.generateTurn).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(resumed.result.current.displayedTurn).not.toBeNull());
+    expect(resumed.result.current.gameState.history).toHaveLength(1);
+    expect(resumed.result.current.displayedTurn?.currentEvent.id).toBe(STARTER_EVENTS[2].id);
+  });
+  it('restores completed ending versions without rewriting them on each toggle', async () => {
+    const service = services();
+    service.maxTurns = 1;
+    service.generateEnding = vi.fn().mockResolvedValueOnce({ id: 'ai_generated', title: 'Original ending', summary: 'A scene.' })
+      .mockResolvedValueOnce({ id: 'ai_generated', title: '原来的结局', summary: '具体场景。' });
+    const first = renderHook(() => useGame(service));
+    await waitFor(() => expect(first.result.current.displayedTurn).not.toBeNull());
+    choose(first.result);
+    await waitFor(() => expect(first.result.current.ending?.generatedLocale).toBe('en'));
+    act(() => first.result.current.setLocale('zh'));
+    await waitFor(() => expect(first.result.current.ending?.generatedLocale).toBe('zh'));
+    act(() => first.result.current.setLocale('en'));
+    expect(first.result.current.ending?.title).toBe('Original ending');
+    first.unmount();
+    const resumed = renderHook(() => useGame(service));
+    act(() => resumed.result.current.setLocale('zh'));
+    expect(resumed.result.current.ending?.title).toBe('原来的结局');
+    expect(service.generateEnding).toHaveBeenCalledTimes(2);
+  });
   it('finishes an old unfinished save at a boundary without applying another choice', async () => {
     const state = createGameServices({ aiEnabled: false, maxTurns: 5 });
     const first = renderHook(() => useGame(state));

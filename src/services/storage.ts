@@ -12,6 +12,8 @@ export type PersistedGame = {
   displayedTurn: DisplayedTurn | null;
   locale: Locale;
   ending: Ending | null;
+  turnVariants?: Partial<Record<Locale, DisplayedTurn>>;
+  endingVariants?: Partial<Record<Locale, Ending>>;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -99,7 +101,14 @@ function isValidPersistedGame(value: unknown): value is PersistedGame {
     isValidDisplayedTurn(value.displayedTurn) &&
     isValidLocale(value.locale) &&
     isValidEnding(value.ending)
+    && validVariants(value.turnVariants, isValidDisplayedTurn)
+    && validVariants(value.endingVariants, isValidEnding)
   );
+}
+
+function validVariants(value: unknown, validate: (item: unknown) => boolean): boolean {
+  return value === undefined || (isObject(value) && Object.entries(value).every(([key, item]) =>
+    isValidLocale(key) && isObject(item) && item.generatedLocale === key && validate(item)));
 }
 
 export function loadSavedGame(): PersistedGame | null {

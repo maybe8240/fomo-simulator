@@ -8,6 +8,15 @@ const services = (fetcher: typeof fetch, enabled = true) => createGameServices({
 const turn = { currentEvent: STARTER_EVENTS[0], isAIGenerated: true };
 const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
 describe('same-origin generation', () => {
+ it.each(['http','stream','gateway'])('reports a %s timeout while retaining static fallback', async source => {
+  const value = source === 'stream'
+   ? new Response('{"type":"error","code":"GENERATION_TIMEOUT"}\n', { headers: { 'content-type': 'application/x-ndjson' } })
+   : new Response(JSON.stringify({ code: 'GENERATION_TIMEOUT' }), { status: source === 'gateway' ? 504 : 502 });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(value);
+  const onTimeout = vi.fn();
+  expect((await services(fetcher).generateTurn(state, signal(), undefined, 'en', onTimeout)).isAIGenerated).toBe(false);
+  expect(onTimeout).toHaveBeenCalledOnce();
+ });
  it('passes Chinese as a bounded locale setting for events and endings', async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(turn));
   await services(fetcher).generateTurn(state, signal(), undefined, 'zh');
@@ -85,10 +94,12 @@ describe('same-origin generation', () => {
   const fetcher=vi.fn<typeof fetch>().mockImplementation((_url,init)=>new Promise((_resolve,reject)=>{
    init?.signal?.addEventListener('abort',()=>reject(new Error('aborted')),{once:true});
   }));
-  const pending=services(fetcher).generateTurn(state,controller.signal);
+  const onTimeout = vi.fn();
+  const pending=services(fetcher).generateTurn(state,controller.signal,undefined,'en',onTimeout);
   controller.abort();
   expect((await pending).isAIGenerated).toBe(false);
   expect(fetcher.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  expect(onTimeout).not.toHaveBeenCalled();
  });
  it('bounds browser waiting time',async()=>{
   vi.useFakeTimers();
@@ -96,10 +107,12 @@ describe('same-origin generation', () => {
    const fetcher=vi.fn<typeof fetch>().mockImplementation((_url,init)=>new Promise((_resolve,reject)=>{
     init?.signal?.addEventListener('abort',()=>reject(new Error('timeout')),{once:true});
    }));
-   const pending=services(fetcher).generateTurn(state,signal());
+   const onTimeout = vi.fn();
+   const pending=services(fetcher).generateTurn(state,signal(),undefined,'en',onTimeout);
    await vi.advanceTimersByTimeAsync(40_000);
    expect((await pending).isAIGenerated).toBe(false);
    expect(vi.getTimerCount()).toBe(0);
+   expect(onTimeout).toHaveBeenCalledOnce();
   } finally {vi.useRealTimers();}
  });
 });

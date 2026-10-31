@@ -14,13 +14,17 @@ describe('run image sharing', () => {
     state.completed = true;
     state.player.money = 73;
     state.history = [1, 2].map(turn => ({ turn, eventId: `custom-${turn}`, eventTitle: `Event ${turn}`,
-      actionId: `action-${turn}`, actionLabel: `Choice ${turn}`, resultText: `Outcome ${turn}`, missedPathsText: [`Missed ${turn}`] }));
+      actionId: `action-${turn}`, actionLabel: `Take path ${turn}`, eventDescription: `Scene ${turn}`, resultText: `Outcome ${turn}`, missedPathsText: [`Missed ${turn}`] }));
     const file = await createRunImage(state, { id: 'ai_generated', title: 'Your ending', summary: 'Your journey.' }, 'en');
     expect(file.type).toBe('image/png');
     const text = drawn.join('\n');
-    for (const value of ['Your ending', 'Your journey.', 'Final Stats', 'Money: 73 / 100', 'History Log', 'Choice 1', 'Choice 2', 'Missed 1', 'Missed 2']) {
+    for (const value of ['Your ending', 'Your journey.', 'Final Stats', 'Money: 73 / 100', 'History Log', 'Scene 1', 'Scene 2']) {
       expect(text).toContain(value);
     }
+    expect(text).not.toContain('Missed');
+    expect(text).toContain('You chose to take path 1.');
+    expect(text).toContain('You chose to take path 2.');
+    expect(text).not.toContain('Chosen option');
   });
   it('downloads a PNG directly even when native sharing is available', async () => {
     vi.useFakeTimers();

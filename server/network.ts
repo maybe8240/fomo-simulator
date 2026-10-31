@@ -27,3 +27,10 @@ export function transientConnection(error: unknown): boolean {
   return ['ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET']
     .includes(networkCode(error) ?? '');
 }
+
+export function transportTimedOut(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== 'object' || depth > 5) return false;
+  if ('name' in error && error.name === 'TimeoutError') return true;
+  if (['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(networkCode(error) ?? '')) return true;
+  return 'cause' in error && transportTimedOut(error.cause, depth + 1);
+}

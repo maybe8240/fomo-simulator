@@ -1,6 +1,10 @@
 import type { Locale } from '../i18n';
 import type { GameState } from '../engine/types';
 
+export class GenerationTimeoutError extends Error {
+  constructor() { super('Generation timed out'); }
+}
+
 // This transport only talks to the same-origin application server. No provider credentials.
 export async function requestGameGeneration(
   kind: 'event' | 'ending', state: GameState, signal: AbortSignal, fetcher: typeof fetch = fetch,
@@ -10,13 +14,20 @@ export async function requestGameGeneration(
   const abort = () => controller.abort();
   if (signal.aborted) abort();
   else signal.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(abort, 40_000);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; abort(); }, 40_000);
   try {
     const response = await fetcher('/api/game/' + kind, {
       method: 'POST', credentials: 'same-origin', signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...(onNarrative ? { Accept: 'application/x-ndjson' } : {}) }, body: JSON.stringify({ state, locale }),
     });
-    if (!response.ok) throw new Error('Generation unavailable');
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      if (response.status === 504 || (body && typeof body === 'object' && 'code' in body && body.code === 'GENERATION_TIMEOUT')) {
+        throw new GenerationTimeoutError();
+      }
+      throw new Error('Generation unavailable');
+    }
     if (response.headers.get('content-type')?.includes('application/x-ndjson')) {
       if (!response.body) throw new Error('Missing stream');
       const reader = response.body.getReader();
@@ -39,6 +50,7 @@ export async function requestGameGeneration(
             const frame = JSON.parse(buffer.slice(0, newline));
             buffer = buffer.slice(newline + 1);
             if (!frame || typeof frame !== 'object') throw new Error('Invalid frame');
+            if (frame.type === 'error' && frame.code === 'GENERATION_TIMEOUT') throw new GenerationTimeoutError();
             if (frame.type === 'result') return frame.value;
             if (frame.type !== 'narrative' || typeof frame.text !== 'string' || frame.text.length > 8000) {
               throw new Error('Invalid stream');
@@ -54,6 +66,9 @@ export async function requestGameGeneration(
       }
     }
     return await response.json();
+  } catch (error) {
+    if (timedOut && !signal.aborted) throw new GenerationTimeoutError();
+    throw error;
   } finally {
     clearTimeout(timer);
     signal.removeEventListener('abort', abort);

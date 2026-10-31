@@ -7,7 +7,7 @@ import { isGameState, object } from '../src/engine/validation.ts';
 import type { GenerationService } from './generation.ts';
 import { GenerationError } from './generation.ts';
 import Anthropic from '@anthropic-ai/sdk';
-import { networkCode } from './network.ts';
+import { networkCode, transportTimedOut } from './network.ts';
 import type { ServerConfig } from './config.ts';
 
 class HttpError extends Error {
@@ -131,7 +131,9 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
       dailyAI++;
       lastAI = now();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), config.generationTimeoutMs);
+      const started = Date.now();
+      let deadlineReached = false;
+      const timer = setTimeout(() => { deadlineReached = true; controller.abort(); }, config.generationTimeoutMs);
       res.once('close', () => controller.abort());
       const streaming = req.headers.accept === 'application/x-ndjson';
       const frame = (data: unknown) => {
@@ -156,19 +158,25 @@ export function createApp(config: ServerConfig, generation: GenerationService, n
         if (streaming) { frame({ type: 'result', value: result }); res.end(); }
         else reply(res, 200, result);
       } catch (error) {
+        const providerTimeout = !controller.signal.aborted
+          && (error instanceof Anthropic.APIConnectionTimeoutError || transportTimedOut(error));
+        const timedOut = deadlineReached || providerTimeout;
         // Never expose SDK errors, upstream bodies, tokens, or prompt/history data.
         console.warn('Generation failed', {
-          reason: controller.signal.aborted ? 'cancelled_or_timeout'
+          reason: deadlineReached ? 'generation_timeout' : providerTimeout ? 'provider_timeout'
+            : controller.signal.aborted ? 'cancelled'
             : error instanceof GenerationError ? error.reason
               : error instanceof Anthropic.APIConnectionTimeoutError ? 'provider_timeout'
               : error instanceof Anthropic.APIConnectionError ? 'provider_connection'
                 : error instanceof Anthropic.APIError ? 'provider_rejected' : 'generation_error',
           ...(error instanceof Anthropic.APIError && Number.isInteger(error.status) ? { status: error.status } : {}),
           ...(error instanceof Anthropic.APIConnectionError ? { network: networkCode(error) ?? 'unknown' } : {}),
+          ...(timedOut ? { elapsedMs: Date.now() - started, kind: ending ? 'ending' : 'event' } : {}),
         });
+        const timeoutCode = timedOut ? { code: 'GENERATION_TIMEOUT' } : {};
         if (res.headersSent) {
-          if (!res.destroyed) res.end(JSON.stringify({ type: 'error' }) + '\n');
-        } else reply(res, 502, { error: 'Generation unavailable. Please try again later.' });
+          if (!res.destroyed) res.end(JSON.stringify({ type: 'error', ...timeoutCode }) + '\n');
+        } else reply(res, 502, { error: 'Generation unavailable. Please try again later.', ...timeoutCode });
       } finally {
         clearTimeout(timer);
         activeAI--;

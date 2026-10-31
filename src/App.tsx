@@ -9,7 +9,7 @@ import ShareRun from './ui/ShareRun';
 
 function App({ services = defaultGameServices }: { services?: GameServices }) {
   const { gameState, displayedTurn, locale, ending, isGenerating, isGeneratingEnding,
-    selectAction, setLocale, restart, narrative } = useGame(services);
+    selectAction, setLocale, restart, narrative, didTimeOut } = useGame(services);
   const currentEvent = displayedTurn?.currentEvent;
   const localizedEnding = ending
     ? getLocalizedEnding(locale, ending.id, ending.title, ending.summary, gameState)
@@ -54,6 +54,8 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
           </div>
         </header>
 
+        {didTimeOut && <p role="status" className="timeout-notice">{translate(locale, 'generation_timeout')}</p>}
+
         {import.meta.env.DEV && <StatPanel gameState={gameState} locale={locale} />}
 
         {(!gameState.completed || !displayedTurn?.isAIGenerated || displayedTurn.generatedLocale === locale) && <section className="section-block">
@@ -72,20 +74,22 @@ function App({ services = defaultGameServices }: { services?: GameServices }) {
           /> : <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_event')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>}
         </section>}
 
-        {localizedEnding ? (
+        {gameState.completed ? (
           <section className="panel ending-panel">
             <div className="panel-heading">
               <h2>{translate(locale, 'ending')}</h2>
             </div>
-            <p className="ending-title">{localizedEnding.title}</p>
-            <p className="status">{localizedEnding.summary}</p>
+            {localizedEnding ? <>
+              <p className="ending-title">{localizedEnding.title}</p>
+              <p className="status">{localizedEnding.summary}</p>
+            </> : isGeneratingEnding && (
+              <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_ending')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>
+            )}
             {ending && <ShareRun key={`${gameState.seed}-${locale}`} state={gameState} ending={ending} locale={locale} />}
             <button className="restart-button" onClick={restart} type="button">
               {translate(locale, 'restart_run')}
             </button>
           </section>
-        ) : isGeneratingEnding ? (
-          <div aria-busy="true"><p className="loading-status" role="status"><span className="loading-spinner" aria-hidden="true" />{translate(locale, 'generating_ending')}</p>{narrative && <p className="streaming-narrative">{narrative}</p>}</div>
         ) : (
           import.meta.env.DEV && (
             <section className="panel">

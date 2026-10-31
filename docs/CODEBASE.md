@@ -130,6 +130,10 @@ See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-cl
 Offline tests verify cache directives and streaming behavior; live cache-hit usage
 and latency have not been measured.
 
+The ending panel appears as soon as the run completes, including while ending
+generation is pending or streaming. It keeps the same heading, styling, and
+restart control throughout; sharing appears once the ending is ready.
+
 Completed-run sharing is owned by `src/ui/ShareRun.tsx` and
 `src/services/share.ts`. A canvas-rendered PNG recap is prepared after the ending
 arrives and downloaded directly when the player clicks Share Run.
@@ -225,3 +229,30 @@ in both the history log and PNG recap. Legacy version-1 English wrappers are
 recognized and rebuilt locally in the selected language; generated labels are
 preserved, with no AI translation call. Selected-action and turn wrappers also
 continue to use the current interface language.
+
+Current-turn `turnVariants` and completed `endingVariants` optionally persist up
+to one validated en/zh result each in version-1 saves. First visits to an uncached
+language generate natively; subsequent toggles restore the exact version, including
+choice IDs/effects, without another request. Incomplete generation is cancelled
+and stale results ignored. Advancing clears event variants for the next turn;
+restart clears all variants. Old saves seed the cache from a language-tagged
+displayed result. Cache fields never enter backend generation requests.
+
+History display and PNG recaps now show the turn/event title, event description,
+and a second-person choice sentence (You chose to …. / 你选择了…。). Unchosen-option
+sections are hidden; old missed-path data remains readable for save compatibility.
+New history stores the full validated description (up to 6,000 characters), while
+server prompts still use at most the first 1,600 characters per scene. Static
+legacy entries recover descriptions from the catalog. Legacy AI entries without
+a saved description show a localized unavailable message; missing prose is not
+reconstructed or invented.
+
+Timeout reporting: backend warnings distinguish `generation_timeout`,
+`provider_timeout`, and ordinary cancellation. Timeout warnings include only
+elapsed milliseconds, event/ending kind, and existing allowlisted diagnostics.
+A safe `GENERATION_TIMEOUT` code is sent in JSON errors or streaming error frames.
+The browser also classifies its own 40-second deadline and gateway HTTP 504 as
+timeouts. A localized on-page status explains that built-in content is being used.
+The notice is transient, clears with the next state/language/restart, and is not
+saved. Cancellation during navigation, language switching or restart does not
+produce a timeout notice. Provider messages and response bodies remain private.

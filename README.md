@@ -150,8 +150,8 @@ See [docs/CODEBASE.md](docs/CODEBASE.md) and [AGENTS.md](AGENTS.md) for developm
 
 Selecting Chinese uses native Chinese prompts for original Chinese stories,
 choices, and endings; there is no English-to-Chinese translation pass. Switching
-language cancels pending generation and regenerates an unplayed AI event or AI
-ending without advancing the run. Previously chosen history keeps its recorded
+language restores its saved current-turn version, or generates that language
+once if absent, without advancing the run. Completed endings are cached too. Previously chosen history keeps its recorded
 language. Restart the frontend/backend after updating to enable this behavior.
 
 The browser requests newline-delimited JSON from the existing game endpoints.
@@ -178,9 +178,14 @@ and latency have not been measured.
 
 ## Share a completed run
 
+The ending panel appears immediately after the run's final choice, with a loading
+indicator and streaming text while the ending is generated.
+
 After the ending is ready, Share Run creates a PNG recap with the localized
-ending, full chronological history (including missed paths), and final player
+ending, full chronological history (including event descriptions and chosen options), and final player
 and world stats. Clicking Share Run downloads the PNG directly; no native share sheet is opened.
+Each history turn describes your choice as “You chose to ….” (or “你选择了…。” in Chinese),
+both in the history log and the downloaded recap.
 Image generation happens locally; no image or saved run is uploaded by the app.
 Final stats appear in the exported image even in production, while the in-game
 stats panel remains development-only.
@@ -212,3 +217,7 @@ when a stat is at a boundary. Old unfinished saves already at a boundary after a
 recorded choice now resume at the ending, retaining that choice and clearing any
 old ending. Existing completed saves keep their saved ending. No extra choice is
 applied on refresh. Ordinary runs still finish at their configured turn limit.
+
+When generation times out, the backend logs a safe timeout category with elapsed
+time and request kind. The page shows an English/Chinese timeout notice while
+providing built-in content. Cancelling or restarting does not trigger that notice.

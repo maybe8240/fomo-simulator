@@ -24,7 +24,7 @@ export function resolveAction(
 
   const historyEntry: HistoryEntry = {
     actionType: action.type,
-    eventDescription: event.description.slice(0, 1600),
+    eventDescription: event.description.slice(0, 6000),
     actionFlavor: action.flavor.slice(0, 400),
     missedActions: displayedTurn.currentEvent.actions.filter(candidate => candidate.id !== action.id)
       .map(candidate => ({ type: candidate.type, label: candidate.label })),

@@ -30,7 +30,7 @@ Format required:
 
 function storyContext(history: HistoryEntry[]) {
   return history.map(entry => ({
-    turn: entry.turn, event: entry.eventTitle, scene: entry.eventDescription ?? null,
+    turn: entry.turn, event: entry.eventTitle, scene: entry.eventDescription?.slice(0, 1600) ?? null,
     selected_action: entry.actionLabel, action_type: entry.actionType ?? null,
     action_detail: entry.actionFlavor ?? null,
   }));

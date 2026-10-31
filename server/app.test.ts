@@ -100,7 +100,8 @@ describe('HTTP boundary', () => {
     });
     await start({ generationTimeoutMs: 20 });
     const result = await send('/api/game/event', { state }, { accept: 'application/x-ndjson' });
-    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error' });
+    expect(result.text.trim().split('\n').map(line => JSON.parse(line)).at(-1)).toEqual({ type: 'error', code: 'GENERATION_TIMEOUT' });
+    expect(console.warn).toHaveBeenCalledWith('Generation failed', expect.objectContaining({ reason: 'generation_timeout', kind: 'event', elapsedMs: expect.any(Number) }));
     expect(vi.mocked(generation.event).mock.calls[0][1].aborted).toBe(true);
   });
   it('serves the React entry, HEAD, and assets with security headers', async () => {
@@ -177,7 +178,9 @@ describe('HTTP boundary', () => {
   it('times out even if an upstream implementation ignores cancellation', async () => {
     generation.event = vi.fn(() => new Promise<DisplayedTurn>(() => {}));
     await start({ generationTimeoutMs: 20 });
-    expect((await send()).status).toBe(502);
+    const response = await send();
+    expect(response.status).toBe(502);
+    expect(JSON.parse(response.text).code).toBe('GENERATION_TIMEOUT');
     expect(vi.mocked(generation.event).mock.calls[0][1].aborted).toBe(true);
   });
   it('enforces the generation interval and daily quota without trusting forwarded IPs', async () => {
