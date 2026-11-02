@@ -99,7 +99,55 @@ describe('server-owned generation', () => {
     expect(create.mock.calls[0][0].max_tokens).toBe(1024);
   });
   it('rejects a malformed ending', async () => {
-    await expect(service({ title: {}, summary: 1 }).generation.ending(state, new AbortController().signal)).rejects.toThrow();
+    const { generation, create } = service({ title: {}, summary: 1 });
+    await expect(generation.ending(state, new AbortController().signal)).rejects.toMatchObject({ reason: 'invalid_ending' });
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+  it.each(['en', 'zh'] as const)('repairs an invalid %s ending using the received response, with at most two retries', async locale => {
+    const { generation, create } = service(null);
+    const invalid = '{"title":"Draft","summary":"A story with an "unescaped" quote."}';
+    const second = JSON.stringify({ title: '', summary: 'Keep this scene.' });
+    const ending = { title: locale === 'zh' ? '最后一班车' : 'The Last Bus', summary: locale === 'zh' ? '你带着账单回家。' : 'You return home with the invoice.' };
+    const message = (text: string) => ({ content: [{ type: 'text', text }] });
+    create.mockResolvedValueOnce(message(invalid)).mockResolvedValueOnce(message(second))
+      .mockResolvedValueOnce(message(JSON.stringify(ending)));
+    expect(await generation.ending(state, new AbortController().signal, undefined, locale))
+      .toEqual({ id: 'ai_generated', ...ending });
+    expect(create).toHaveBeenCalledTimes(3);
+    const requests = create.mock.calls.map(([request]) => request);
+    expect(requests[1].messages[0]).toEqual(requests[0].messages[0]);
+    expect(requests[1].messages[1]).toEqual({ role: 'assistant', content: invalid });
+    expect(requests[2].messages[1]).toEqual({ role: 'assistant', content: second });
+    expect(requests[1].messages[2].content).toContain(locale === 'zh' ? '修复已有结局' : 'Repair the existing ending');
+    expect(requests[2].system).toEqual(requests[0].system);
+  });
+  it('retains the streamed draft while repairing and does not retry after cancellation', async () => {
+    const draft = '{"title":"A draft","summary":"You return home with the invoice."';
+    const controller = new AbortController();
+    const create = vi.fn();
+    const stream = {
+      on: vi.fn(), finalMessage: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: draft }] }),
+    };
+    stream.on.mockImplementation((_event, callback) => { callback('', draft); });
+    const client = { messages: { stream: vi.fn().mockReturnValue(stream), create } } as unknown as Anthropic;
+    const preview = vi.fn(() => controller.abort());
+    await expect(createGenerationService(client, 'claude-haiku-4-5').ending(state, controller.signal, preview))
+      .rejects.toThrow('Generation cancelled');
+    expect(preview).toHaveBeenCalledWith('You return home with the invoice.');
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('keeps the original preview visible until a streamed ending is repaired', async () => {
+    const draft = '{"title":"A draft","summary":"Your original closing scene."';
+    const create = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ title: 'Repaired', summary: 'Your original closing scene.' }) }] });
+    const stream = { on: vi.fn(), finalMessage: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: draft }] }) };
+    stream.on.mockImplementation((_event, callback) => { callback('', draft); });
+    const client = { messages: { stream: vi.fn().mockReturnValue(stream), create } } as unknown as Anthropic;
+    const preview = vi.fn();
+    const result = await createGenerationService(client, 'claude-haiku-4-5').ending(state, new AbortController().signal, preview);
+    expect(result).toEqual({ id: 'ai_generated', title: 'Repaired', summary: 'Your original closing scene.' });
+    expect(create).toHaveBeenCalledOnce();
+    expect(preview.mock.calls.every(([text]) => text === 'Your original closing scene.')).toBe(true);
+    expect(create.mock.calls[0][0].messages[1].content).toBe(draft);
   });
   it('uses static events and endings when AI is off', async () => {
     const generation = createGenerationService(null, 'claude-haiku-4-5');
