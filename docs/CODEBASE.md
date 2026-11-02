@@ -127,6 +127,18 @@ after the complete response passes validation. Previews are temporary, plain tex
 and never saved. Restart/unmount cancels the stream and discards stale previews.
 A failed, interrupted, or invalid stream falls back to static content. Clients
 without the streaming Accept header still receive the original JSON response.
+Ending validation failures are an exception: `server/generation.ts` makes at most
+two repair calls with the original system/run context and the preceding raw
+response as an assistant message, followed by localized repair instructions. It
+does not log that response. Repair calls retain the original visible preview
+until a validated result arrives, share the HTTP deadline/abort signal, and can
+add provider charges (including the existing transport-level retry behavior).
+They count as one logical application generation request, not three quota units.
+On exhausted repairs or stream failure, `services/game.ts` keeps received ending
+prose as a bounded, display-only `ai_generated` ending with a localized generic
+title; ordinary version-1 save, language-cache, and export behavior applies.
+Static ending fallback remains when no usable narrative arrived. Partial event
+choices are never promoted to playable content. No save schema changes are needed.
 After streaming headers are sent, failures use a generic error frame instead of
 an HTTP 502. Existing access checks, quotas, and generation deadlines still apply.
 

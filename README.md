@@ -166,6 +166,15 @@ after the complete response passes validation. Previews are temporary, plain tex
 and never saved. Restart/unmount cancels the stream and discards stale previews.
 A failed, interrupted, or invalid stream falls back to static content. Clients
 without the streaming Accept header still receive the original JSON response.
+For endings, invalid completed output gets up to two server-side repair attempts
+in the selected language, using the previous response and original run context.
+The received narrative stays visible during repair. If repair fails or times out,
+the browser keeps any received ending narrative as plain text (up to 6,000
+characters), saving and sharing it instead of substituting the static ending.
+If no narrative arrived, the static ending is still used. Event choices continue
+to require complete validated output. Repairs share the existing request deadline
+and cancellation; each repair can incur another provider charge. No new environment
+variable is needed: max_retry is fixed at 2 (three attempts total).
 After streaming headers are sent, failures use a generic error frame instead of
 an HTTP 502. Existing access checks, quotas, and generation deadlines still apply.
 

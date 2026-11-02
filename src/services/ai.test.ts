@@ -69,6 +69,26 @@ describe('same-origin generation', () => {
   expect(await services(fetcher).generateEnding(state,signal())).toEqual(ending);
   expect(fetcher.mock.calls[0][0]).toBe('/api/game/ending');
  });
+ it.each(['en', 'zh'] as const)('keeps received %s ending prose when repairs fail instead of substituting a stat-limit ending', async locale => {
+  const draft = locale === 'zh' ? '你把最后一张账单放在桌上。' : 'You leave the final invoice on the table.';
+  const body = JSON.stringify({ type: 'narrative', text: draft }) + '\n' + JSON.stringify({ type: 'error' }) + '\n';
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+  const limited = { ...state, completed: true, player: { ...state.player, energy: 0, chaos: 100 } };
+  const preview = vi.fn();
+  const ending = await services(fetcher).generateEnding(limited, signal(), preview, locale);
+  expect(ending).toMatchObject({ id: 'ai_generated', summary: draft });
+  expect(ending.title).toBe(locale === 'zh' ? '结局' : 'Ending');
+  expect(preview).toHaveBeenCalledWith(draft);
+  expect(fetcher).toHaveBeenCalledOnce();
+ });
+ it('preserves received ending prose on a timeout and still reports the timeout', async () => {
+  const body = '{"type":"narrative","text":"The scene already received."}\n{"type":"error","code":"GENERATION_TIMEOUT"}\n';
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+  const onTimeout = vi.fn();
+  expect(await services(fetcher).generateEnding(state, signal(), vi.fn(), 'en', onTimeout))
+   .toMatchObject({ id: 'ai_generated', summary: 'The scene already received.' });
+  expect(onTimeout).toHaveBeenCalledOnce();
+ });
  it.each([401,403,429,500,502])('falls back on HTTP %s', async status=>{
   const fetcher=vi.fn<typeof fetch>().mockResolvedValue(new Response('',{status}));
   expect((await services(fetcher).generateTurn(state,signal())).isAIGenerated).toBe(false);

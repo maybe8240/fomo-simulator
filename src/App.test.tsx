@@ -2,10 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STARTER_EVENTS } from './engine/events';
+import { createInitialState } from './engine/state';
 import type { DisplayedTurn, Ending } from './engine/types';
 import { createGameServices } from './services/game';
 import type { GameServices } from './services/game';
 import { downloadRunImage } from './services/share';
+import { saveGame } from './services/storage';
 
 vi.mock('./services/share', () => ({
   createRunImage: vi.fn().mockImplementation(async () => new File(['png'], 'run.png', { type: 'image/png' })),
@@ -13,6 +15,30 @@ vi.mock('./services/share', () => ({
 }));
 
 describe('game interface', () => {
+  it.each(['en', 'zh'] as const)('keeps the %s streamed ending after failed repair and reload at simultaneous stat limits', async locale => {
+    const event = { ...STARTER_EVENTS[0], actions: STARTER_EVENTS[0].actions.map(action => ({
+      ...action, playerDelta: { energy: -100, chaos: 100 }, worldDelta: {},
+    })) };
+    saveGame({ gameState: createInitialState(123, 5), displayedTurn: { currentEvent: event, isAIGenerated: false }, ending: null, locale });
+    const draft = locale === 'zh' ? '你把最后一张账单放在桌上。' : 'You leave the final invoice on the table.';
+    let output!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start(controller) { output = controller; } });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }));
+    const services = createGameServices({ aiEnabled: true, maxTurns: 5 }, fetcher);
+    const first = render(<App services={services} />);
+    fireEvent.click(document.querySelector('.action-button')!);
+    await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    await act(async () => { output.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'narrative', text: draft }) + '\n')); });
+    expect(screen.getByText(draft)).toBeTruthy();
+    await act(async () => { output.enqueue(new TextEncoder().encode('{"type":"error"}\n')); output.close(); });
+    expect(screen.getByText(draft)).toBeTruthy();
+    expect(document.querySelector('.ending-panel')?.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(document.querySelector('.ending-panel')?.textContent).not.toMatch(/本局因|Your run ended when/);
+    first.unmount();
+    render(<App services={services} />);
+    expect(screen.getByText(draft)).toBeTruthy();
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it.each([false, true])('shows the ending panel throughout generation (stat limit=%s)', async statLimit => {
     let resolve!: (ending: Ending) => void;
     const pending = new Promise<Ending>(done => { resolve = done; });
